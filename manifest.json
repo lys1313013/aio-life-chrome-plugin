@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "aiolife for Chrome",
+  "version": "1.0.0",
+  "description": "aiolife 官方浏览器插件，支持 B 站视频打标与进度同步。",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://www.bilibili.com/video/*",
+    "https://api.bilibili.com/x/web-interface/view*",
+    "https://aiolife.top/*"
+  ],
+  "action": {
+    "default_title": "aiolife",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.bilibili.com/video/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

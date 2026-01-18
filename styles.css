@@ -1,0 +1,88 @@
+/* aiolife for Chrome Styles */
+
+/* 更多菜单中的打标项样式 */
+.more-ops-item#aiolife-more-item {
+    position: relative;
+    padding: 0 !important;
+}
+
+.aiolife-more-container {
+    width: 100%;
+    padding: 10px 15px;
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+.aiolife-label {
+    display: block;
+    color: #18191c;
+    font-size: 14px;
+}
+
+.aiolife-sub-menu {
+    display: none;
+    position: absolute;
+    left: -120px; /* 向左弹出，避免遮挡 */
+    top: 0;
+    background: white;
+    border: 1px solid #e3e8ec;
+    border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    width: 110px;
+    z-index: 10001;
+}
+
+.aiolife-more-container:hover .aiolife-sub-menu {
+    display: block;
+}
+
+.aiolife-sub-item {
+    padding: 8px 12px;
+    font-size: 13px;
+    color: #18191c;
+    transition: background 0.2s;
+}
+
+.aiolife-sub-item:hover {
+    background-color: #f1f2f3;
+    color: #00aeec;
+}
+
+/* Toast 提示样式 */
+.aiolife-toast {
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    background-color: rgba(24, 25, 28, 0.9);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 50px; /* 胶囊形状 */
+    z-index: 100000;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+    opacity: 0;
+    pointer-events: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.aiolife-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.aiolife-toast-icon {
+    color: #00aeec; /* B站蓝 */
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+

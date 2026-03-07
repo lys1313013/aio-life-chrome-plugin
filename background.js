@@ -2,7 +2,7 @@
  * aiolife for Chrome - Background Service Worker
  */
 
-const API_BASE_URL = 'https://aiolife.top/api/bilibili-video';
+const API_BASE_URL = 'https://aiolife.top/api/b-video';
 
 // 简单的内存缓存，避免频繁请求 B 站 API
 const videoInfoCache = new Map();

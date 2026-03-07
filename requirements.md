@@ -42,7 +42,7 @@
 
 ### 3.2 API 接口定义
 
-**API 基础路径**: `https://aiolife.top/api/bilibili-video`
+**API 基础路径**: `https://aiolife.top/api/b-video`
 
 #### A. 同步打标信息 (Tag Video)
 - **Method**: `POST /tagVideo`

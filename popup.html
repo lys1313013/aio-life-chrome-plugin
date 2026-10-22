@@ -1,63 +1,70 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <style>
-    body {
-      width: 150px;
-      padding: 10px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-    .title {
-      font-size: 14px;
-      font-weight: bold;
-      margin-bottom: 10px;
-      color: #18191c;
-      text-align: center;
-    }
-    .tag-list {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-    }
-    .tag-item {
-      padding: 8px;
-      text-align: center;
-      background-color: #f1f2f3;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 13px;
-      transition: all 0.2s;
-    }
-    .tag-item:hover {
-      background-color: #00aeec;
-      color: white;
-    }
-    #status {
-      margin-top: 8px;
-      font-size: 11px;
-      text-align: center;
-      color: #9499a0;
-    }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AIO Life · 网页入库</title>
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="title">同步</div>
-  <div class="tag-list">
-    <div class="tag-item" data-tag="待看">待看</div>
-    <div class="tag-item" data-tag="已看">已看</div>
-    <div class="tag-item" data-tag="学习中">学习中</div>
-    <div class="tag-item" data-tag="收藏">收藏</div>
-  </div>
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="icon-play" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="5"/><path d="m10 9 5 3-5 3Z"/></symbol>
+    <symbol id="icon-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="m8 12 3 3 5-6"/></symbol>
+    <symbol id="icon-book" viewBox="0 0 24 24"><path d="M12 6c-3-2-6-2-9-1v14c3-1 6-1 9 1 3-2 6-2 9-1V5c-3-1-6-1-9 1Zm0 0v14"/></symbol>
+    <symbol id="icon-star" viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/></symbol>
+    <symbol id="icon-key" viewBox="0 0 24 24"><circle cx="8" cy="9" r="4"/><path d="m11 12 8 8m-4-4 3-3m0 6 3-3"/></symbol>
+    <symbol id="icon-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+    <symbol id="icon-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  </svg>
 
-  <div class="settings">
-    <div style="font-size: 11px; margin: 10px 0 5px; color: #666;">配置 Authorization:</div>
-    <input type="password" id="auth-token" placeholder="输入 Token..." style="width: 100%; font-size: 11px; padding: 4px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 3px;">
-    <button id="save-auth" style="width: 100%; margin-top: 5px; font-size: 11px; cursor: pointer;">保存 Token</button>
-  </div>
+  <main class="popup">
+    <header class="header">
+      <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="m7 23 9-16 9 16M11 17h10"/><circle cx="24" cy="8" r="2"/></svg></div>
+      <div class="brand-copy"><h1>AIO Life</h1><p>收藏书影音，整理每一次购买</p></div>
+      <span class="platform-badge" id="platform-badge">浏览器助手</span>
+    </header>
 
-  <div id="status">请在B站视频页使用</div>
+    <section class="video-card" aria-labelledby="video-title">
+      <span class="video-icon"><svg class="icon"><use href="#icon-play"/></svg></span>
+      <div class="video-copy"><span class="eyebrow" id="video-label">当前页面</span><h2 id="video-title">正在识别视频…</h2><p id="video-meta">读取当前标签页</p></div>
+    </section>
 
+    <section class="tag-section" aria-labelledby="tag-heading">
+      <div class="section-heading"><h2 id="tag-heading">标记视频</h2><span>选择后同步至 AIO Life</span></div>
+      <div class="tag-list">
+        <button type="button" class="tag-item" data-tag="待看" disabled><span class="tag-icon"><svg class="icon"><use href="#icon-clock"/></svg></span><span class="tag-copy"><strong>待看</strong><small>留给之后的自己</small></span><svg class="icon tag-arrow"><use href="#icon-chevron"/></svg></button>
+        <button type="button" class="tag-item" data-tag="已看" disabled><span class="tag-icon"><svg class="icon"><use href="#icon-check"/></svg></span><span class="tag-copy"><strong>已看</strong><small>记录一份收获</small></span><svg class="icon tag-arrow"><use href="#icon-chevron"/></svg></button>
+        <button type="button" class="tag-item" data-tag="学习中" disabled><span class="tag-icon"><svg class="icon"><use href="#icon-book"/></svg></span><span class="tag-copy"><strong>学习中</strong><small>一点一滴地积累</small></span><svg class="icon tag-arrow"><use href="#icon-chevron"/></svg></button>
+        <button type="button" class="tag-item" data-tag="收藏" disabled><span class="tag-icon"><svg class="icon"><use href="#icon-star"/></svg></span><span class="tag-copy"><strong>收藏</strong><small>值得反复回看</small></span><svg class="icon tag-arrow"><use href="#icon-chevron"/></svg></button>
+      </div>
+    </section>
+
+    <section class="capture-section" aria-label="网页采集">
+      <button type="button" id="capture-page" class="capture-button" disabled>采集当前页面</button>
+      <p id="capture-hint">支持豆瓣书影音、京东／淘宝订单详情</p>
+    </section>
+
+    <section class="auto-sync-setting" aria-label="豆瓣自动同步">
+      <label><input type="checkbox" id="douban-auto-toggle"><span>豆瓣标记自动同步</span></label>
+      <p>开启后，在豆瓣电影／剧集详情页保存“想看／看过”会自动同步；取消收藏也会移除 AIO Life 对应观影记录，无需逐条确认。首次需允许访问豆瓣。</p>
+      <p id="douban-auto-state" role="status">正在读取设置…</p>
+    </section>
+
+    <details class="settings" id="auth-settings">
+      <summary><svg class="icon"><use href="#icon-key"/></svg><span>连接设置</span><span class="auth-state" id="auth-state">未配置</span><svg class="icon settings-chevron"><use href="#icon-chevron"/></svg></summary>
+      <form id="auth-form" class="settings-body">
+        <label for="api-base">API 服务地址（包含 /api）</label>
+        <div class="token-field"><input type="url" id="api-base" value="https://aiolife.top/api" required spellcheck="false"></div>
+        <label for="auth-token">Authorization Token</label>
+        <div class="token-field"><input type="password" id="auth-token" placeholder="粘贴 Token；留空保留原配置" autocomplete="off" spellcheck="false"><button type="button" id="toggle-auth" class="icon-button" aria-label="显示 Token" aria-pressed="false"><svg class="icon"><use href="#icon-eye"/></svg></button></div>
+        <div class="settings-actions"><p>仅保存在当前浏览器</p><button type="button" id="clear-auth" class="icon-button" aria-label="清除已保存 Token" title="清除已保存 Token">×</button><button type="submit" id="save-auth">保存配置</button></div>
+      </form>
+    </details>
+
+    <footer class="footer"><span class="status-dot" id="status-dot" aria-hidden="true"></span><p id="status" role="status" aria-live="polite">正在准备…</p></footer>
+  </main>
+  <script src="capture/core.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

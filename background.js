@@ -1,8 +1,10 @@
+importScripts('capture/background.js');
+importScripts('douban-auto/background.js');
 /**
  * aiolife for Chrome - Background Service Worker
  */
 
-const API_BASE_URL = 'https://aiolife.top/api/b-video';
+async function bVideoBase() { return (await captureConfig()).base + '/b-video'; }
 
 // 简单的内存缓存，避免频繁请求 B 站 API
 const videoInfoCache = new Map();
@@ -27,7 +29,7 @@ async function fetchVideoInfo(bvid) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('aiolife Background: Received message', message);
+  // Capture messages are handled separately; never log credentials or captured order data.
 
   if (message.type === 'SYNC_TAG') {
     syncTag(message.data)
@@ -94,7 +96,7 @@ async function syncTag(data) {
     console.log('Background: Syncing to /tagVideo...', payload);
 
     const headers = await getHeaders();
-    const response = await fetch(`${API_BASE_URL}/tagVideo`, {
+    const response = await fetch(`${await bVideoBase()}/tagVideo`, {
       method: 'POST',
       headers: headers,
       body: JSON.stringify(payload)
@@ -115,14 +117,19 @@ async function syncProgress(data) {
   console.log('Background: Syncing progress to server...', data);
   
   try {
+    const headers = await getHeaders();
+    // 未配置授权或视频不在用户的记录中时，静默跳过，避免自动创建未标记的视频。
+    if (!headers.Authorization || !await getProgress(data.bvid, headers)) {
+      return { code: 0, skipped: true };
+    }
+
     const videoInfo = await fetchVideoInfo(data.bvid);
     const currentEpisode = parseInt(data.p) || 1;
     const currentTime = data.currentTime || 0;
     const watchedDuration = calculateWatchedDuration(videoInfo.pages, currentEpisode, currentTime);
     const progress = videoInfo.duration > 0 ? Math.round((watchedDuration / videoInfo.duration) * 100) : 0;
     
-    const headers = await getHeaders();
-    const response = await fetch(`${API_BASE_URL}/syncProgress`, {
+    const response = await fetch(`${await bVideoBase()}/syncProgress`, {
       method: 'POST',
       headers: headers,
       body: JSON.stringify({
@@ -132,7 +139,10 @@ async function syncProgress(data) {
        })
     });
     const result = await response.json();
-    return { ...result, totalProgress: progress };
+    if (!response.ok || result.code !== 0 || result.data === false) {
+      throw new Error(result.message || '同步进度失败');
+    }
+    return { ...result, skipped: false, totalProgress: progress };
   } catch (error) {
     console.error('Background: syncProgress failed', error);
     throw error;
@@ -152,12 +162,29 @@ function calculateWatchedDuration(pages, currentEpisode, currentTime = 0) {
 }
 
 /**
- * 获取进度接口 (已停用请求逻辑)
+ * 查询当前用户已标记的视频。现有查询接口不支持按 BVID 筛选，需逐页匹配。
+ * 直接读取服务端记录，避免仅凭本地标记缓存漏掉其他设备添加的视频。
  */
-async function getProgress(bvid) {
-  console.log('Background: getProgress request skipped.');
-  return { bvid: bvid, p: 1 };
+async function getProgress(bvid, headers) {
+  headers = headers || await getHeaders();
+  if (!headers.Authorization) return null;
+
+  const pageSize = 100;
+  let received = 0;
+  for (let page = 1; ; page++) {
+    const response = await fetch(`${await bVideoBase()}/query?page=${page}&pageSize=${pageSize}`, { headers });
+    const result = await response.json();
+    if (!response.ok || result.code !== 0 || !Array.isArray(result.data?.items)) {
+      throw new Error(result.message || '查询视频标记失败');
+    }
+
+    const { items, total } = result.data;
+    const video = items.find(item => item.bvid === bvid);
+    if (video) return video;
+
+    received += items.length;
+    if (items.length === 0 || (total != null ? received >= Number(total) : items.length < pageSize)) {
+      return null;
+    }
+  }
 }
-
-
-

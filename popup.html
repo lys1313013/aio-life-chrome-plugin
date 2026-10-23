@@ -21,48 +21,47 @@
   <main class="popup">
     <header class="header">
       <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="m7 23 9-16 9 16M11 17h10"/><circle cx="24" cy="8" r="2"/></svg></div>
-      <div class="brand-copy"><h1>AIO Life</h1><p>收藏书影音，整理每一次购买</p></div>
+      <div class="brand-copy"><h1>AIO Life</h1></div>
       <span class="platform-badge" id="platform-badge">浏览器助手</span>
     </header>
 
     <section class="video-card" aria-labelledby="video-title">
       <span class="video-icon"><svg class="icon"><use href="#icon-play"/></svg></span>
-      <div class="video-copy"><span class="eyebrow" id="video-label">当前页面</span><h2 id="video-title">正在识别视频…</h2><p id="video-meta">读取当前标签页</p></div>
+      <div class="video-copy"><span class="eyebrow" id="video-label">当前页面</span><h2 id="video-title">正在读取…</h2><p id="video-meta"></p></div>
     </section>
 
     <section class="tag-section" aria-labelledby="tag-heading">
-      <div class="section-heading"><h2 id="tag-heading">标记视频</h2><span>选择后同步至 AIO Life</span></div>
+      <div class="section-heading"><h2 id="tag-heading">标记视频</h2></div>
       <div class="tag-list">
-        <button type="button" class="tag-item" data-tag="待看" disabled><span class="tag-icon"><svg class="icon"><use href="#icon-clock"/></svg></span><span class="tag-copy"><strong>待看</strong><small>留给之后的自己</small></span><svg class="icon tag-arrow"><use href="#icon-chevron"/></svg></button>
-        <button type="button" class="tag-item" data-tag="已看" disabled><span class="tag-icon"><svg class="icon"><use href="#icon-check"/></svg></span><span class="tag-copy"><strong>已看</strong><small>记录一份收获</small></span><svg class="icon tag-arrow"><use href="#icon-chevron"/></svg></button>
-        <button type="button" class="tag-item" data-tag="学习中" disabled><span class="tag-icon"><svg class="icon"><use href="#icon-book"/></svg></span><span class="tag-copy"><strong>学习中</strong><small>一点一滴地积累</small></span><svg class="icon tag-arrow"><use href="#icon-chevron"/></svg></button>
-        <button type="button" class="tag-item" data-tag="收藏" disabled><span class="tag-icon"><svg class="icon"><use href="#icon-star"/></svg></span><span class="tag-copy"><strong>收藏</strong><small>值得反复回看</small></span><svg class="icon tag-arrow"><use href="#icon-chevron"/></svg></button>
+        <button type="button" class="tag-item" data-tag="待看" disabled><span class="tag-icon"><svg class="icon"><use href="#icon-clock"/></svg></span><span class="tag-copy"><strong>待看</strong></span><svg class="icon tag-arrow"><use href="#icon-chevron"/></svg></button>
+        <button type="button" class="tag-item" data-tag="已看" disabled><span class="tag-icon"><svg class="icon"><use href="#icon-check"/></svg></span><span class="tag-copy"><strong>已看</strong></span><svg class="icon tag-arrow"><use href="#icon-chevron"/></svg></button>
+        <button type="button" class="tag-item" data-tag="学习中" disabled><span class="tag-icon"><svg class="icon"><use href="#icon-book"/></svg></span><span class="tag-copy"><strong>学习中</strong></span><svg class="icon tag-arrow"><use href="#icon-chevron"/></svg></button>
+        <button type="button" class="tag-item" data-tag="收藏" disabled><span class="tag-icon"><svg class="icon"><use href="#icon-star"/></svg></span><span class="tag-copy"><strong>收藏</strong></span><svg class="icon tag-arrow"><use href="#icon-chevron"/></svg></button>
       </div>
     </section>
 
     <section class="capture-section" aria-label="网页采集">
       <button type="button" id="capture-page" class="capture-button" disabled>采集当前页面</button>
-      <p id="capture-hint">支持豆瓣书影音、京东／淘宝订单详情</p>
     </section>
 
     <section class="auto-sync-setting" aria-label="豆瓣自动同步">
       <label><input type="checkbox" id="douban-auto-toggle"><span>豆瓣标记自动同步</span></label>
-      <p>开启后，在豆瓣电影／剧集详情页保存“想看／看过”会自动同步；取消收藏也会移除 AIO Life 对应观影记录，无需逐条确认。首次需允许访问豆瓣。</p>
-      <p id="douban-auto-state" role="status">正在读取设置…</p>
+      <p>同步想看、看过；取消标记也会移除观影记录。</p>
+      <p id="douban-auto-state" role="status"></p>
     </section>
 
     <details class="settings" id="auth-settings">
       <summary><svg class="icon"><use href="#icon-key"/></svg><span>连接设置</span><span class="auth-state" id="auth-state">未配置</span><svg class="icon settings-chevron"><use href="#icon-chevron"/></svg></summary>
       <form id="auth-form" class="settings-body">
-        <label for="api-base">API 服务地址（包含 /api）</label>
+        <label for="api-base">API 地址（含 /api）</label>
         <div class="token-field"><input type="url" id="api-base" value="https://aiolife.top/api" required spellcheck="false"></div>
-        <label for="auth-token">Authorization Token</label>
-        <div class="token-field"><input type="password" id="auth-token" placeholder="粘贴 Token；留空保留原配置" autocomplete="off" spellcheck="false"><button type="button" id="toggle-auth" class="icon-button" aria-label="显示 Token" aria-pressed="false"><svg class="icon"><use href="#icon-eye"/></svg></button></div>
+        <label for="auth-token">Token</label>
+        <div class="token-field"><input type="password" id="auth-token" placeholder="粘贴 Token，留空不变" autocomplete="off" spellcheck="false"><button type="button" id="toggle-auth" class="icon-button" aria-label="显示 Token" aria-pressed="false"><svg class="icon"><use href="#icon-eye"/></svg></button></div>
         <div class="settings-actions"><p>仅保存在当前浏览器</p><button type="button" id="clear-auth" class="icon-button" aria-label="清除已保存 Token" title="清除已保存 Token">×</button><button type="submit" id="save-auth">保存配置</button></div>
       </form>
     </details>
 
-    <footer class="footer"><span class="status-dot" id="status-dot" aria-hidden="true"></span><p id="status" role="status" aria-live="polite">正在准备…</p></footer>
+    <footer class="footer"><span class="status-dot" id="status-dot" aria-hidden="true"></span><p id="status" role="status" aria-live="polite"></p></footer>
   </main>
   <script src="capture/core.js"></script>
   <script src="popup.js"></script>

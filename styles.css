@@ -1,30 +1,30 @@
 /* Scoped styles for the Bilibili menu and AIO Life notifications. */
 .more-ops-item#aiolife-more-item { position: relative; padding: 0 !important; }
 #aiolife-more-item .aiolife-more-container { position: relative; width: 100%; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; }
-#aiolife-more-item .aiolife-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 10px 15px; border: 0; background: transparent; color: #17785d; font: inherit; font-size: 13px; cursor: pointer; }
+#aiolife-more-item .aiolife-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 10px 15px; border: 0; background: transparent; color: #303238; font: inherit; font-size: 13px; cursor: pointer; }
 #aiolife-more-item .aiolife-label::after { content: '‹'; font-size: 18px; line-height: 1; }
-#aiolife-more-item .aiolife-sub-menu { display: none; position: absolute; right: 100%; top: -5px; width: 150px; padding: 7px; box-sizing: border-box; background: #fff; border: 1px solid #e5ece8; border-radius: 12px; box-shadow: 0 8px 30px #243c351a; z-index: 10001; }
+#aiolife-more-item .aiolife-sub-menu { display: none; position: absolute; right: 100%; top: -5px; width: 150px; padding: 7px; box-sizing: border-box; background: #fff; border: 1px solid #e7e8eb; border-radius: 12px; box-shadow: 0 8px 30px #3032381a; z-index: 10001; }
 #aiolife-more-item .aiolife-more-container:hover .aiolife-sub-menu,
 #aiolife-more-item .aiolife-more-container:focus-within .aiolife-sub-menu { display: block; }
-#aiolife-more-item .aiolife-menu-heading { padding: 5px 9px 9px; color: #819087; font-size: 10px; letter-spacing: .5px; text-align: left; }
-#aiolife-more-item .aiolife-sub-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; border: 0; border-radius: 7px; background: transparent; font: inherit; font-size: 13px; color: #243c35; cursor: pointer; text-align: left; transition: background .16s; }
+#aiolife-more-item .aiolife-menu-heading { padding: 5px 9px 9px; color: #74777f; font-size: 10px; letter-spacing: .5px; text-align: left; }
+#aiolife-more-item .aiolife-sub-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; border: 0; border-radius: 7px; background: transparent; font: inherit; font-size: 13px; color: #303238; cursor: pointer; text-align: left; transition: background .16s; }
 #aiolife-more-item .aiolife-sub-item::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #6488bd; }
 #aiolife-more-item .aiolife-sub-item[data-tag="已看"]::before { background: #2c9777; }
 #aiolife-more-item .aiolife-sub-item[data-tag="学习中"]::before { background: #9181b8; }
 #aiolife-more-item .aiolife-sub-item[data-tag="收藏"]::before { background: #c5913e; }
-#aiolife-more-item .aiolife-sub-item:hover { background: #eaf4ef; color: #17785d; }
-#aiolife-more-item button:focus-visible { outline: 2px solid #32a181; outline-offset: -2px; }
-.aiolife-toast { position: fixed; top: 24px; left: 50%; transform: translate(-50%, -12px); display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px); box-sizing: border-box; padding: 13px 18px; border: 1px solid #e5ece8; border-radius: 12px; background: #fff; color: #243c35; box-shadow: 0 8px 30px #243c3526; z-index: 100000; font: 13px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; overflow-wrap: anywhere; }
+#aiolife-more-item .aiolife-sub-item:hover { background: #f5f6f7; color: #303238; }
+#aiolife-more-item button:focus-visible { outline: 2px solid #656b75; outline-offset: -2px; }
+.aiolife-toast { position: fixed; top: 24px; left: 50%; transform: translate(-50%, -12px); display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px); box-sizing: border-box; padding: 13px 18px; border: 1px solid #e7e8eb; border-radius: 12px; background: #fff; color: #303238; box-shadow: 0 8px 30px #30323826; z-index: 100000; font: 13px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; overflow-wrap: anywhere; }
 .aiolife-toast.show { opacity: 1; transform: translate(-50%, 0); }
-.aiolife-toast-icon { display: grid; place-items: center; flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; background: #eaf4ef; color: #17785d; font-size: 14px; font-weight: 600; }
+.aiolife-toast-icon { display: grid; place-items: center; flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; background: #f5f6f7; color: #17785d; font-size: 14px; font-weight: 600; }
 .aiolife-toast[data-state="error"] .aiolife-toast-icon { background: #fff0ef; color: #bc4848; }
 .aiolife-toast[data-state="loading"] .aiolife-toast-icon { font-size: 18px; }
 @media (prefers-color-scheme: dark) {
-  #aiolife-more-item .aiolife-label { color: #70caaa; }
-  #aiolife-more-item .aiolife-sub-menu, .aiolife-toast { background: #202d27; border-color: #34443b; color: #e2ece6; }
-  #aiolife-more-item .aiolife-sub-item { color: #e2ece6; }
-  #aiolife-more-item .aiolife-menu-heading { color: #9cafa3; }
-  #aiolife-more-item .aiolife-sub-item:hover, .aiolife-toast-icon { background: #243c31; color: #70caaa; }
+  #aiolife-more-item .aiolife-label { color: #eceef1; }
+  #aiolife-more-item .aiolife-sub-menu, .aiolife-toast { background: #222327; border-color: #393c43; color: #eceef1; }
+  #aiolife-more-item .aiolife-sub-item { color: #eceef1; }
+  #aiolife-more-item .aiolife-menu-heading { color: #a1a5ae; }
+  #aiolife-more-item .aiolife-sub-item:hover, .aiolife-toast-icon { background: #2b2d32; color: #eceef1; }
 }
 @media (prefers-reduced-motion: reduce) {
   .aiolife-toast, #aiolife-more-item .aiolife-sub-item { transition: none; }

@@ -37,7 +37,7 @@ function updateSaveState() {
   $('commit').disabled = busy || pendingUploads > 0 || saved || !valid;
   $('preview').disabled = busy || pendingUploads > 0 || saved || Boolean(state.uncertain);
   $('commit').textContent = saved ? '已保存' : state.uncertain ? '核实后按原请求重试' : '确认保存';
-  $('save-hint').textContent = state.kind === 'purchase' ? saved ? '本草稿已保存，已禁用重复提交。重新采集前请先核对设备／衣柜，避免重复。' : state.uncertain ? '上次提交结果不确定，请先到设备／衣柜核实。只在确认需要重试时使用原请求，超过 24 小时不要重试。' : '选择要创建设备或衣物的商品，检查后确认保存。商品信息只用于填充现有设备／衣柜。' : valid ? '请核对修改内容；提交使用短期请求保护，超时后先核实结果。' : '填写信息后点击“预览与查重”，再确认保存。';
+  $('save-hint').textContent = state.kind === 'purchase' ? saved ? '已保存，请到设备／衣柜查看。' : state.uncertain ? '上次提交结果不确定，请先到设备／衣柜核实。只在确认需要重试时使用原请求，超过 24 小时不要重试。' : '检查商品信息后保存。' : valid ? '' : '修改后请重新预览。';
 }
 function optionPairs(name) { return (options[name] || []).map(row => [String(row.id), row.name]); }
 function field(target, key, label, {type = 'text', values, required = false, wide = false, disabled = false, min, max, step, onchange, placeholder} = {}) {
@@ -57,12 +57,12 @@ function showResult(value) {
   if (state.kind === 'douban') node.append(el('p', {}, `${value.mediaType === 'book' ? '阅读' : '观影'}记录：${value.id}`));
   else {
     node.append(el('p', {}, `已创建 ${value.assets?.length || 0} 件物品`), el('ul', {}, (value.assets || []).map(asset => el('li', {}, `${asset.kind === 'device' ? '设备' : '衣物'} · ${asset.id}`))));
-    node.append(el('p', {class: 'small'}, '请到设备／衣柜查看。本草稿已锁定；如需再次采集，请先核实已有物品，再清除本地草稿重新操作。'));
+    node.append(el('p', {class: 'small'}, '再次采集前请核实已有物品，避免重复。'));
   }
 }
 function imageControl(target, imageUrl, bizType, existing = false) {
   const summary = el('p', {class: 'small'}), box = el('div', {class: 'image-control'});
-  const refresh = () => { summary.textContent = target.fileId ? '图片已上传，保存时关联' : target.fileId === '' ? '将不使用图片' : existing ? '保留原图片；可选择替换' : '图片尚未保存。可下载来源图片、上传本地图片，或无图保存。'; };
+  const refresh = () => { summary.textContent = target.fileId ? '图片已上传' : target.fileId === '' ? '将不使用图片' : existing ? '保留原图片' : '可选图片'; };
   const allowed = value => { try { const url = new URL(value); return url.protocol === 'https:' && ['doubanio.com', '360buyimg.com', 'alicdn.com', 'taobaocdn.com'].some(host => url.hostname === host || url.hostname.endsWith('.' + host)); } catch { return false; } };
   if (allowed(imageUrl)) { const image = el('img', {src: imageUrl, alt: '来源图片预览', referrerPolicy: 'no-referrer'}); image.addEventListener('error', () => image.hidden = true); box.append(image); }
   const download = el('button', {type: 'button', disabled: !allowed(imageUrl)}, '使用来源图片');
@@ -100,7 +100,7 @@ function doubanEditor() {
   const sourceInput = el('input', {type: 'url', required: true, value: sourcePendingUrl ?? state.draft.url, 'data-field': 'url'});
   sourceInput.addEventListener('input', () => { sourcePendingUrl = sourceInput.value; updateSaveState(); });
   sourceInput.addEventListener('change', () => { switchDoubanSource().catch(error => message(error.message, true)); });
-  const source = fields(el('label', {class: 'field wide'}, el('span', {}, '豆瓣详情页链接（更换条目会打开独立草稿）'), sourceInput));
+  const source = fields(el('label', {class: 'field wide'}, el('span', {}, '豆瓣链接'), sourceInput));
   if (existing) source.append(field(state, 'action', `已收录 · ${existing.id}`, {values: [['update', '更新已有记录（保留未修改字段）'], ['create', '保留已有记录，不覆盖']]}));
   const meta = fields(
     field(f, 'title', '标题', {required: true, wide: true}),
@@ -110,7 +110,7 @@ function doubanEditor() {
     field(f, 'totalProgress', isBook ? '总页数' : '总进度（电影分钟／电视剧集数）', {type: 'number', min: 0, step: 1}),
     field(f, 'currentProgress', isBook ? '当前页数' : '当前进度', {type: 'number', min: 0, step: 1})
   );
-  if (!isBook) meta.append(field(f, 'rating', '我的评分（不使用豆瓣公共评分）', {values: [['', '未评分'], ['1', '1 星'], ['2', '2 星'], ['3', '3 星'], ['4', '4 星'], ['5', '5 星']]}));
+  if (!isBook) meta.append(field(f, 'rating', '我的评分', {values: [['', '未评分'], ['1', '1 星'], ['2', '2 星'], ['3', '3 星'], ['4', '4 星'], ['5', '5 星']]}));
   meta.append(field(f, 'remark', '备注', {type: 'textarea', wide: true}), imageControl(f, state.coverImgUrl, isBook ? 'read' : 'movie', Boolean(existing?.fields?.fileId)));
   return [panel('来源与收录状态', source), panel(isBook ? '阅读信息' : '观影信息', meta)];
 }
@@ -143,10 +143,10 @@ function purchaseEditor() {
   const basics = fields(
     field(o, 'shopName', '店铺', {}),
     field(o, 'paidAmount', '订单实付金额（元）', {required: true, placeholder: '待确认；最多 2 位小数'}),
-    field(o, 'paidAt', '付款时间（优先作为购买日期）', {type: 'datetime-local', step: 1}),
+    field(o, 'paidAt', '付款时间', {type: 'datetime-local', step: 1}),
     field(o, 'orderedAt', '下单时间', {type: 'datetime-local', step: 1})
   );
-  const result = [panel('购买信息', el('p', {class: 'small'}, `${o.platform === 'jd' ? '京东' : '淘宝'}${o.orderNo ? ' · 来源订单 ' + o.orderNo : ''}`), basics, el('p', {class: 'small'}, '购买日期优先采用付款日期，缺失时采用下单日期；请确认适用。商品与购买信息将用于创建设备／衣物。'))];
+  const result = [panel('购买信息', el('p', {class: 'small'}, `${o.platform === 'jd' ? '京东' : '淘宝'}${o.orderNo ? ' · 来源订单 ' + o.orderNo : ''}`), basics, el('p', {class: 'small'}, '购买日期优先使用付款时间，否则使用下单时间。'))];
   o.items.forEach((item, index) => {
     const itemPanel = el('section', {class: 'panel'});
     itemPanel.append(el('div', {class: 'item-heading'}, el('h2', {}, `商品 ${index + 1}`), el('button', {type: 'button', class: 'quiet', onclick: () => { o.items.splice(index, 1); state.assetChoices.splice(index, 1); change(); render(); }}, '移除此行')));
@@ -155,7 +155,7 @@ function purchaseEditor() {
       field(item, 'title', '商品名称', {required: true, wide: true}),
       field(item, 'spec', '规格', {}),
       field(item, 'quantity', '购买数量', {type: 'number', min: 1, max: 100, step: 1, required: true, onchange: () => assets.replaceChildren(assetsFor(item, index))}),
-      field(item, 'paidAmount', '本行全部商品实付（含运费／优惠分摊）', {required: true})
+      field(item, 'paidAmount', '本行实付（含运费、优惠）', {required: true})
     );
     assets.append(assetsFor(item, index)); itemPanel.append(grid, assets); result.push(itemPanel);
   });
@@ -163,12 +163,12 @@ function purchaseEditor() {
     try { const allocations = C.allocate(o.paidAmount, o.items.map(item => item.paidAmount || '0')); o.items.forEach((item, index) => item.paidAmount = allocations[index]); state.amountConfirmed = false; change(); render(); message('已按现有行金额比例分摊（无金额时均分）。请核对商品实付，再勾选金额确认。'); } catch (error) { message(error.message, true); }
   }}, '分摊订单实付到各商品行')));
   const confirmation = el('input', {type: 'checkbox', checked: Boolean(state.amountConfirmed), required: true, onchange: event => { state.amountConfirmed = event.target.checked; change(); }});
-  result.push(el('label', {class: 'check'}, confirmation, '我已核对购买日期、实付金额、数量及分摊结果，并确认所选物品需要新建到设备／衣柜。'));
+  result.push(el('label', {class: 'check'}, confirmation, '已核对日期、金额和数量，确认创建所选物品。'));
   return result;
 }
 function render() {
   $('editor').replaceChildren(...(state.kind === 'douban' ? doubanEditor() : purchaseEditor()));
-  warningList([...(state.warnings || []), ...(state.preview?.warnings || [])]);
+  warningList([...new Set([...(state.warnings || []), ...(state.preview?.warnings || [])])]);
   if (state.result) showResult(state.result); updateSaveState();
 }
 async function switchDoubanSource() {
@@ -209,7 +209,7 @@ async function preview() {
       state.didPreview = true;
     }
     state.previewFingerprint = C.stableJSON(previewRequest());
-    await persist(); render(); message(state.kind === 'purchase' ? '商品信息检查完成，请选择要创建的设备／衣物并确认保存。' : response.existing ? '已找到已有记录，请检查现有状态后保存。' : '查重完成，尚未创建记录。请确认后保存。');
+    await persist(); render(); message(state.kind === 'purchase' ? '商品信息已检查' : response.existing ? '已收录，可更新记录' : '');
   } catch (error) { message(error.message, true); }
   finally { setBusy(false); }
 }
@@ -257,7 +257,7 @@ async function commit(event) {
     state.uncertain = false;
     state.result = result;
     if (state.kind === 'douban') { state.baseFields = pickDouban(state.fields); state.previewFingerprint = null; }
-    await persist(); showResult(result); message('保存成功，记录已写入 AIO Life。');
+    await persist(); showResult(result); message('');
   } catch (error) {
     if (dispatched && (error.uncertain || /超时|timeout|Failed to fetch|NetworkError|结果不确定|无法确认.*提交|结果待确认|正在处理|处理中/i.test(error.message))) { state.uncertain = true; await persist(); message(error.message + '。保存结果不确定，请先核实已有记录；不会自动重试。', true); }
     else { if (dispatched) { state.uncertain = false; await persist(); } message(error.message, true); }
@@ -289,7 +289,7 @@ async function init() {
       state.warnings = (state.warnings || []).filter(warning => !/明细标识|账单|支出/.test(warning));
     }
     $('page-title').textContent = state.kind === 'douban' ? '豆瓣书影音 · 入库预览' : `${state.draft.platform === 'jd' ? '京东' : '淘宝'}商品 · 录入设备／衣柜`;
-    $('source-description').textContent = state.kind === 'douban' ? '先核对采集内容，再查重与保存。' : '核对商品信息，选择需要创建的设备或衣物，再确认保存。';
+    $('source-description').textContent = '';
     $('preview').textContent = state.kind === 'douban' ? '预览与查重' : '检查商品信息';
     $('preview').addEventListener('click', preview); $('capture-form').addEventListener('submit', commit);
     $('discard').addEventListener('click', async () => { if (confirm(state.kind === 'purchase' ? '清除草稿后重新采集会产生新请求，不能依靠订单号防止重复。请先到设备／衣柜核实是否已保存，再清除。已保存物品不会删除。' : '清除当前本地草稿？已保存的 AIO Life 记录不会删除。')) { await persistQueue; await chrome.storage.local.remove(storageKey); location.reload(); } });

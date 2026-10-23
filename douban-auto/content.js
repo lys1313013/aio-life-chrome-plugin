@@ -12,19 +12,19 @@
     function show(text, retry = false, clear = false) {
       if (!notice?.isConnected) {
         notice = doc.createElement('div'); notice.id = 'aio-douban-native-status'; notice.setAttribute('role', 'status'); notice.setAttribute('aria-live', 'polite');
-        Object.assign(notice.style, {position: 'fixed', bottom: '20px', right: '20px', zIndex: '2147483647', maxWidth: '360px', background: '#fff', color: '#243c35', border: '1px solid #dce6e0', borderRadius: '12px', padding: '14px 16px', boxShadow: '0 4px 24px #0002', font: '13px/1.7 system-ui,sans-serif'});
+        Object.assign(notice.style, {position: 'fixed', bottom: '20px', right: '20px', zIndex: '2147483647', maxWidth: '360px', background: '#fff', color: '#303238', border: '1px solid #e7e8eb', borderRadius: '12px', padding: '14px 16px', boxShadow: '0 4px 24px #0002', font: '13px/1.7 system-ui,sans-serif'});
         doc.documentElement.append(notice);
       }
       notice.replaceChildren(doc.createTextNode(text));
       if (timer) clearTimeout(timer);
       if (retry) {
         const button = doc.createElement('button'); button.type = 'button'; button.textContent = '核实后使用原请求重试';
-        Object.assign(button.style, {display: 'block', marginTop: '8px', border: '1px solid #17785d', background: '#edf6f1', color: '#17785d', borderRadius: '6px', padding: '5px 8px', cursor: 'pointer'});
+        Object.assign(button.style, {display: 'block', marginTop: '8px', border: '1px solid #303238', background: '#f5f6f7', color: '#303238', borderRadius: '6px', padding: '5px 8px', cursor: 'pointer'});
         button.addEventListener('click', async () => { button.disabled = true; try { render(await request({type: 'DOUBAN_AUTO_RETRY'})); } catch (error) { show(error.message, true); } }); notice.append(button);
       }
       if (clear) {
         const button = doc.createElement('button'); button.type = 'button'; button.textContent = '核实后清除待处理同步';
-        Object.assign(button.style, {display: 'block', marginTop: '8px', border: '1px solid #ccd8d0', background: '#fff', color: '#52645a', borderRadius: '6px', padding: '5px 8px', cursor: 'pointer'});
+        Object.assign(button.style, {display: 'block', marginTop: '8px', border: '1px solid #e7e8eb', background: '#fff', color: '#74777f', borderRadius: '6px', padding: '5px 8px', cursor: 'pointer'});
         button.addEventListener('click', async () => {
           if (!doc.defaultView.confirm('请先核对 AIO Life。此操作仅清除当前条目的本地待处理同步，不会新增或删除业务记录；之后需要重新在豆瓣保存或取消标记。')) return;
           button.disabled = true; try { detector?.cancel(); render(await request({type: 'DOUBAN_AUTO_CLEAR'})); } catch (error) { show(error.message, false, true); }

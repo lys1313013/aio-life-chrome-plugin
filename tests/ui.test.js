@@ -27,7 +27,7 @@ test('purchase saves only original assets; timeout requires manual same-key retr
   const check=ctx.document.querySelector('.check input');check.checked=true;check.dispatchEvent(new ctx.w.Event('change'));
   submit(ctx);submit(ctx);await until(()=>ctx.document.querySelector('#messages').textContent.includes('模拟网络超时'));
   assert.equal(commits.length,1);assert(ctx.store[key].submission.key);assert.equal(commits[0].order.paidAmount,'10.01');assert.equal(commits[0].assets.length,1);assert.equal(commits[0].assets[0].unitIndex,1);assert.equal(commits[0].expense,undefined);assert.equal(commits[0].version,undefined);assert.equal(commits[0].assets[0].mode,undefined);assert(ctx.document.querySelector('#messages').textContent.includes('先核实'));assert.equal(ctx.document.querySelector('#editor').inert,true);
-  submit(ctx);await until(()=>ctx.document.querySelector('#messages').textContent.includes('保存成功'));
+  submit(ctx);await until(()=>!ctx.document.querySelector('#result').hidden && ctx.document.querySelector('#commit').disabled);
   assert.equal(commits[0].idempotencyKey,commits[1].idempotencyKey);assert.equal(ctx.document.querySelector('#result').hidden,false);
   assert.equal(ctx.document.querySelector('#commit').disabled,true);submit(ctx);await new Promise(r=>setTimeout(r,10));assert.equal(commits.length,2);assert.match(ctx.document.querySelector('#result').textContent,/设备.*9007199254740993888/);assert(!ctx.document.body.textContent.includes('采购记录'));
  }finally{ctx.close();}

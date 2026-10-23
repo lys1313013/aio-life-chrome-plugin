@@ -31,14 +31,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const autoToggle = document.getElementById('douban-auto-toggle');
   const autoState = document.getElementById('douban-auto-state');
-  try { const settings = await call({type: 'DOUBAN_AUTO_SETTINGS_GET'}); autoToggle.checked = settings.enabled; autoState.textContent = settings.enabled ? '已开启：确认豆瓣原生操作成功后同步' : '未开启，不自动读取或同步豆瓣标记'; }
+  try { const settings = await call({type: 'DOUBAN_AUTO_SETTINGS_GET'}); autoToggle.checked = settings.enabled; autoState.textContent = ''; }
   catch (error) { autoState.textContent = error.message; }
   autoToggle.addEventListener('change', async () => {
     const requested = autoToggle.checked; autoToggle.disabled = true;
     try {
       if (requested && !await chrome.permissions.request({origins: ['https://movie.douban.com/*']})) throw new Error('未授予豆瓣站点权限，自动同步保持关闭');
       const settings = await call({type: 'DOUBAN_AUTO_SETTINGS_SET', enabled: requested});
-      autoToggle.checked = settings.enabled; autoState.textContent = settings.enabled ? '已开启；当前豆瓣详情页也已启用' : '已关闭自动同步';
+      autoToggle.checked = settings.enabled; autoState.textContent = '';
     } catch (error) { autoToggle.checked = !requested; autoState.textContent = error.message; }
     finally { autoToggle.disabled = false; }
   });
@@ -83,7 +83,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     captureButton.disabled = !identity;
     if (identity) {
       captureButton.textContent = identity.kind === 'douban' ? '加入阅读／观影' : '录入设备／衣柜';
-      document.getElementById('capture-hint').textContent = '读取当前页面，预览确认后保存；不会自动提交。';
       document.getElementById('platform-badge').textContent = identity.kind === 'douban' ? '豆瓣' : identity.platform === 'jd' ? '京东' : '淘宝';
     }
     validVideo = Boolean(url && url.protocol === 'https:' && url.hostname === 'www.bilibili.com' && extractBvid(url.pathname));
@@ -94,12 +93,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('video-title').title = title;
       document.getElementById('video-meta').textContent = `${extractBvid(tab.url)} · 第 ${extractPart(tab.url)} P`;
       tagItems.forEach(item => item.disabled = false);
-      setStatus(result.configured ? '已就绪，选择一个标签开始同步' : '首次使用，请先配置 Token');
+      document.querySelector('.capture-section').hidden = true;
+      setStatus(result.configured ? '' : '请先配置 Token');
     } else {
       document.getElementById('video-title').textContent = identity ? (tab.title || '当前页面') : '打开需要收藏或录入的页面';
-      document.getElementById('video-meta').textContent = identity ? '点击下方按钮开始预览' : '豆瓣详情、京东淘宝订单、B 站视频';
+      document.getElementById('video-meta').textContent = identity ? url.hostname : '支持豆瓣、京东／淘宝订单、B 站视频';
       document.querySelector('.tag-section').hidden = true;
-      setStatus(identity ? '准备就绪，采集后可核对和保存' : '当前页面暂不支持采集');
+      document.querySelector('.capture-section').hidden = !identity;
+      setStatus(result.configured ? '' : '请先配置 Token');
     }
   } catch {
     document.getElementById('video-title').textContent = '暂时无法读取页面';

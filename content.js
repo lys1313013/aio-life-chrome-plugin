@@ -43,7 +43,7 @@
           <button type="button" class="aiolife-sub-item" data-tag="待看">待看</button>
           <button type="button" class="aiolife-sub-item" data-tag="已看">已看</button>
           <button type="button" class="aiolife-sub-item" data-tag="学习中">学习中</button>
-          <button type="button" class="aiolife-sub-item" data-tag="收藏">收藏</button>
+          <button type="button" class="aiolife-sub-item" data-tag="暂停">暂停</button>
         </div>
       </div>
     `;

@@ -6,6 +6,13 @@ importScripts('douban-auto/background.js');
 
 async function bVideoBase() { return (await captureConfig()).base + '/b-video'; }
 
+const videoTagStatuses = new Map([
+  ['待看', 'not_started'],
+  ['已看', 'completed'],
+  ['学习中', 'in_progress'],
+  ['暂停', 'on_hold']
+]);
+
 // 简单的内存缓存，避免频繁请求 B 站 API
 const videoInfoCache = new Map();
 
@@ -69,6 +76,9 @@ async function getHeaders() {
  * 调用同步打标接口 (更新后：先获取 B 站信息再调用 /tagVideo)
  */
 async function syncTag(data) {
+  const status = videoTagStatuses.get(data.tag);
+  if (!status) throw new Error('不支持的视频标记');
+
   console.log('Background: Fetching video info from Bilibili for', data.bvid);
   
   try {
@@ -86,8 +96,7 @@ async function syncTag(data) {
       duration: videoInfo.duration,
       episodes: videoInfo.videos,
       currentEpisode: currentEpisode,
-      progress: progress,
-      status: 2,
+      status: status,
       notes: "",
       ownerName: videoInfo.owner.name,
       watchedDuration: watchedDuration
@@ -103,6 +112,9 @@ async function syncTag(data) {
     });
     
     const result = await response.json();
+    if (!response.ok || result.code !== 0 || result.data === false) {
+      throw new Error(result.message || '标记视频失败');
+    }
     return { ...result, totalProgress: progress };
   } catch (error) {
     console.error('Background: syncTag failed', error);

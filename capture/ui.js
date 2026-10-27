@@ -3,8 +3,9 @@
 const $ = id => document.getElementById(id);
 const C = AioCapture;
 let state, storageKey, config, busy = false, pendingUploads = 0, options = {}, persistQueue = Promise.resolve();
+const productImages = new Map();
 const DOUBAN_FIELDS = ['title','author','director','type','totalProgress','currentProgress','status','remark','rating','fileId'];
-let sourcePendingUrl, sourceChangePromise;
+let sourcePendingUrl, sourceChangePromise, savedReadError = '';
 function pickDouban(value) { return Object.fromEntries(DOUBAN_FIELDS.filter(key => value[key] !== undefined).map(key => [key, structuredClone(value[key])])); }
 function dirtyDouban() { return Object.fromEntries(DOUBAN_FIELDS.filter(key => state.fields[key] !== undefined && C.stableJSON(state.fields[key]) !== C.stableJSON(state.baseFields?.[key])).map(key => [key, structuredClone(state.fields[key])])); }
 const statuses = [['not_started', '未开始'], ['in_progress', '进行中'], ['completed', '已完成'], ['on_hold', '搁置']];
@@ -26,18 +27,30 @@ function persist() {
   persistQueue = persistQueue.catch(() => {}).then(() => chrome.storage.local.set({[storageKey]: snapshot}));
   return persistQueue;
 }
-function change() { if (state.kind === 'purchase' && state.result) return; state.result = null; $('result').hidden = true; persist().catch(error => message('草稿保存失败：' + error.message, true)); updateSaveState(); }
+function editingSaved() { return state.kind === 'purchase' && Boolean(state.result) && Array.isArray(state.assetEdits); }
+function change() { if (editingSaved()) { persist().catch(error => message('草稿保存失败：' + error.message, true)); updateSaveState(); return; } if (state.kind === 'purchase' && state.result) return; state.result = null; $('result').hidden = true; persist().catch(error => message('草稿保存失败：' + error.message, true)); updateSaveState(); }
 function setBusy(value, label) { busy = value; $('preview').disabled = value; $('commit').disabled = value || !state.preview; $('discard').disabled = value; $('capture-form').setAttribute('aria-busy', String(value)); $('editor').inert = value || Boolean(state.kind === 'purchase' && (state.result || state.uncertain)); if (label) message(label); updateSaveState(); }
 function updateSaveState() {
   if (!state) return;
   let valid = Boolean(state.preview) && sourcePendingUrl === undefined;
   try { valid = valid && state.previewFingerprint === C.stableJSON(previewRequest()); } catch { valid = false; }
   const saved = state.kind === 'purchase' && Boolean(state.result);
+  $('edit-saved').hidden = !saved;
+  $('edit-saved').disabled = busy || pendingUploads > 0;
+  $('edit-saved').textContent = editingSaved() ? '重新读取物品' : '重试读取物品';
+  if (editingSaved()) {
+    $('editor').inert = busy;
+    $('commit').disabled = busy || pendingUploads > 0 || !state.assetEdits.some(edit => Object.keys(assetChanges(edit)).length);
+    $('commit').textContent = '保存修改';
+    $('preview').disabled = true;
+    $('save-hint').textContent = '修改已创建的物品；来源订单及物品归属保持不变。';
+    return;
+  }
   $('editor').inert = busy || saved || Boolean(state.uncertain);
-  $('commit').disabled = busy || pendingUploads > 0 || saved || !valid;
+  $('commit').disabled = busy || pendingUploads > 0 || saved || (state.kind === 'douban' && !valid);
   $('preview').disabled = busy || pendingUploads > 0 || saved || Boolean(state.uncertain);
   $('commit').textContent = saved ? '已保存' : state.uncertain ? '核实后按原请求重试' : '确认保存';
-  $('save-hint').textContent = state.kind === 'purchase' ? saved ? '已保存，请到设备／衣柜查看。' : state.uncertain ? '上次提交结果不确定，请先到设备／衣柜核实。只在确认需要重试时使用原请求，超过 24 小时不要重试。' : '检查商品信息后保存。' : valid ? '' : '修改后请重新预览。';
+  $('save-hint').textContent = state.kind === 'purchase' ? saved ? '物品已保存，读取当前信息后即可继续修改。' : state.uncertain ? '上次提交结果不确定，请先到设备／衣柜核实。只在确认需要重试时使用原请求，超过 24 小时不要重试。' : '' : valid ? '' : '修改后请重新预览。';
 }
 function optionPairs(name) { return (options[name] || []).map(row => [String(row.id), row.name]); }
 function field(target, key, label, {type = 'text', values, required = false, wide = false, disabled = false, min, max, step, onchange, placeholder} = {}) {
@@ -60,29 +73,126 @@ function showResult(value) {
     node.append(el('p', {class: 'small'}, '再次采集前请核实已有物品，避免重复。'));
   }
 }
-function imageControl(target, imageUrl, bizType, existing = false) {
-  const summary = el('p', {class: 'small'}), box = el('div', {class: 'image-control'});
-  const refresh = () => { summary.textContent = target.fileId ? '图片已上传' : target.fileId === '' ? '将不使用图片' : existing ? '保留原图片' : '可选图片'; };
+function imageControl(target, imageUrl, bizType, existing = false, purchase) {
+  const summary = el('p', {class: 'small', role: 'status'}), box = el('div', {class: 'image-control'});
   const allowed = value => { try { const url = new URL(value); return url.protocol === 'https:' && ['doubanio.com', '360buyimg.com', 'alicdn.com', 'taobaocdn.com'].some(host => url.hostname === host || url.hostname.endsWith('.' + host)); } catch { return false; } };
-  if (allowed(imageUrl)) { const image = el('img', {src: imageUrl, alt: '来源图片预览', referrerPolicy: 'no-referrer'}); image.addEventListener('error', () => image.hidden = true); box.append(image); }
-  const download = el('button', {type: 'button', disabled: !allowed(imageUrl)}, '使用来源图片');
-  const local = el('input', {type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', 'aria-label': '上传本地图片'});
-  async function upload(data) {
-    pendingUploads++; updateSaveState();
-    download.disabled = true; local.disabled = true; summary.textContent = '正在上传图片…';
-    try { const result = await call({type: 'CAPTURE_UPLOAD', ...data, bizType, scope: state.scope}); if (!result?.id) throw new Error('图片接口未返回文件 ID'); target.fileId = String(result.id); change(); refresh(); }
-    catch (error) { summary.textContent = `${error.message}。可重试、上传本地图片，或点击“无图保存”。`; }
-    finally { pendingUploads--; updateSaveState(); download.disabled = !allowed(imageUrl); local.disabled = false; }
+  const image = el('img', {alt: '封面预览', referrerPolicy: 'no-referrer', hidden: true});
+  let selectedUrl = purchase?.choice.coverUrl ?? imageUrl, working = false;
+  const gallery = el('div', {class: 'cover-gallery', role: 'group', 'aria-label': '封面候选'});
+  function refresh() {
+    summary.textContent = target.fileId ? '封面已上传' : target.fileId === '' ? '将不使用图片' : existing ? '保留原图片' : '可选图片';
+    image.hidden = Boolean(purchase) || target.fileId === '' || !allowed(selectedUrl);
+    if (!image.hidden) image.src = selectedUrl;
+    for (const button of gallery.querySelectorAll('button')) button.setAttribute('aria-pressed', String(Boolean(target.fileId) && button.dataset.url === selectedUrl));
   }
-  download.addEventListener('click', async () => {
-    try { const origin = new URL(imageUrl).origin + '/*'; if (!await chrome.permissions.request({origins: [origin]})) throw new Error('未允许读取该图片域名'); await upload({url: imageUrl}); } catch (error) { summary.textContent = error.message; }
-  });
+  image.addEventListener('error', () => image.hidden = true);
+  const download = el('button', {type: 'button', disabled: !allowed(imageUrl)}, purchase ? '使用订单图片' : '使用来源图片');
+  const local = el('input', {type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', 'aria-label': '上传本地图片'});
+  async function run(label, task) {
+    if (working || busy || (state.kind === 'purchase' && ((state.result && !editingSaved()) || state.uncertain))) return;
+    working = true; pendingUploads++; updateSaveState();
+    box.setAttribute('aria-busy', 'true');
+    for (const control of box.querySelectorAll('button, input')) control.disabled = true;
+    summary.textContent = label;
+    try { await task(); }
+    catch (error) { summary.textContent = error.message; }
+    finally {
+      working = false; pendingUploads--; updateSaveState(); box.setAttribute('aria-busy', 'false');
+      for (const control of box.querySelectorAll('button, input')) control.disabled = false;
+      download.disabled = !allowed(imageUrl);
+    }
+  }
+  async function upload(data) {
+    if (data.url) {
+      const origin = new URL(data.url).origin + '/*';
+      if (!await chrome.permissions.request({origins: [origin]})) throw new Error('未允许读取该图片域名，可重试或上传本地图片');
+    }
+    const result = await call({type: 'CAPTURE_UPLOAD', ...data, bizType, scope: state.scope});
+    if (!result?.id) throw new Error('图片接口未返回文件 ID');
+    // The user may remove the item or change its target while the upload is in flight.
+    if (!box.isConnected || (purchase && purchase.choice.choice !== (bizType === 'device' ? 'device' : 'wardrobe'))) return;
+    target.fileId = String(result.id); selectedUrl = data.url;
+    if (purchase) purchase.choice.coverUrl = data.url || '';
+    change(); refresh();
+  }
+  download.addEventListener('click', () => run('正在上传订单／来源图片…', () => upload({url: imageUrl})));
   local.addEventListener('change', () => {
     const file = local.files[0]; if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { summary.textContent = '图片须小于 10 MB'; return; }
-    const reader = new FileReader(); reader.onload = () => upload({dataUrl: reader.result}); reader.onerror = () => { summary.textContent = '无法读取本地图片'; }; reader.readAsDataURL(file);
+    if (file.size > 10 * 1024 * 1024) { summary.textContent = '图片须小于 10 MB'; local.value = ''; return; }
+    run('正在上传图片…', async () => {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('无法读取本地图片')); reader.readAsDataURL(file);
+      });
+      await upload({dataUrl});
+    }).finally(() => { local.value = ''; });
   });
-  box.append(el('div', {}, summary, el('div', {class: 'image-buttons'}, download, el('label', {class: 'file-label'}, '上传本地图片', local), el('button', {type: 'button', onclick: () => { target.fileId = ''; change(); refresh(); }}, '无图保存'))));
+  const buttons = el('div', {class: 'image-buttons'}, ...(purchase ? [] : [download]));
+  let productStatus;
+  function showGallery(images = []) {
+    const candidates = [];
+    if (allowed(imageUrl)) candidates.push({url: imageUrl, label: '订单图'});
+    images.forEach((url, index) => { if (allowed(url) && !candidates.some(item => item.url === url)) candidates.push({url, label: `商品图 ${index + 1}`}); });
+    if (target.fileId && allowed(selectedUrl) && !candidates.some(item => item.url === selectedUrl)) candidates.push({url: selectedUrl, label: '已选封面'});
+    gallery.replaceChildren(...candidates.map(({url, label}) => {
+      const thumb = el('img', {src: url, alt: '', referrerPolicy: 'no-referrer'});
+      const button = el('button', {type: 'button', disabled: working, 'aria-label': `使用${label}`, 'data-url': url, onclick: () => run('正在上传封面…', () => upload({url}))}, thumb, el('span', {}, label));
+      thumb.addEventListener('error', () => { thumb.hidden = true; button.querySelector('span').textContent = `${label}加载失败`; });
+      return button;
+    }));
+    refresh();
+    if (working) summary.textContent = '正在上传封面…';
+  }
+  if (purchase) showGallery();
+  if (purchase && state.draft.platform === 'jd' && /^\d{1,30}$/.test(purchase.item.sku || '')) {
+    const sku = purchase.item.sku;
+    productStatus = el('p', {class: 'small', role: 'status'});
+    const product = el('button', {type: 'button', hidden: true}, '允许读取商品图片');
+    const placeholder = el('span', {class: 'cover-placeholder'}, '正在读取商品图片…');
+    let loading = false;
+    async function loadImages(requestPermission = false) {
+      if (loading) return;
+      loading = true; product.disabled = true;
+      productStatus.textContent = ''; gallery.setAttribute('aria-busy', 'true');
+      gallery.append(placeholder);
+      try {
+        const permission = {origins: ['https://item.jd.com/*']};
+        const granted = requestPermission ? await chrome.permissions.request(permission) : await chrome.permissions.contains(permission);
+        if (!box.isConnected) return;
+        if (!granted) {
+          product.textContent = '允许读取商品图片'; product.hidden = false;
+          productStatus.textContent = '允许读取京东商品页后，商品图片会与订单图一起展示。';
+          return;
+        }
+        product.hidden = true;
+        let request = productImages.get(sku);
+        if (!request) {
+          request = call({type: 'CAPTURE_JD_IMAGES', sku}).then(result => {
+            const images = [...new Set((result?.images || []).filter(allowed))];
+            if (!images.length) throw new Error('未读取到商品主图，请打开商品页后重试');
+            return images;
+          }).catch(error => { productImages.delete(sku); throw error; });
+          productImages.set(sku, request);
+        }
+        const images = await request;
+        if (box.isConnected) showGallery(images);
+      } catch (error) {
+        if (!box.isConnected) return;
+        productStatus.textContent = error.message;
+        product.textContent = '重试读取商品图片'; product.hidden = false;
+      } finally {
+        loading = false; product.disabled = false; placeholder.remove(); gallery.setAttribute('aria-busy', 'false');
+      }
+    }
+    product.addEventListener('click', () => loadImages(true));
+    buttons.append(product, el('a', {href: `https://item.jd.com/${sku}.html`, target: '_blank', rel: 'noopener noreferrer', class: 'product-link'}, '打开商品页'));
+    // Start after the newly rendered control is attached; concurrent units share one request.
+    Promise.resolve().then(() => { if (box.isConnected) return loadImages(); });
+  }
+  buttons.append(el('label', {class: 'file-label'}, '上传本地图片', local), el('button', {type: 'button', onclick: () => {
+    target.fileId = ''; if (purchase) delete purchase.choice.coverUrl; change(); refresh();
+  }}, '无图保存'));
+  if (!purchase) box.append(image);
+  box.append(el('div', {}, summary, ...(purchase ? [gallery, productStatus, buttons] : [buttons])));
   refresh(); return box;
 }
 function normalizeDate(value) { return value ? value.replace('T', ' ').replace(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2})$/, '$1:00') : undefined; }
@@ -130,7 +240,7 @@ function assetsFor(item, index) {
       const grid = fields(field(f, 'name', '物品名称', {required: true, wide: true}));
       if (kind === 'device') grid.append(field(f, 'type', '设备类型', {values: [['', '未分类'], ...optionPairs('deviceTypes')]}), field(f, 'status', '设备状态', {values: [['', '未设置'], ...optionPairs('deviceStatuses')]}), field(f, 'remark', '设备备注', {type: 'textarea', wide: true}));
       else grid.append(field(f, 'categoryId', '衣物分类', {values: [['', '未分类'], ...optionPairs('wardrobeCategories')]}), field(f, 'brand', '品牌'), field(f, 'color', '颜色'), field(f, 'size', '尺码'), field(f, 'memo', '衣物备注', {type: 'textarea', wide: true}));
-      grid.append(imageControl(f, item.imageUrl, kind === 'device' ? 'device' : 'wardrobe_item'));
+      grid.append(imageControl(f, item.imageUrl, kind === 'device' ? 'device' : 'wardrobe_item', false, {item, choice}));
       detail.append(grid);
     }
     wrapper.append(field(choice, 'choice', `第 ${unit} 件 · 保存为`, {values: [['none', '暂不录入'], ['device', '创建设备'], ['wardrobe', '加入衣柜']], onchange: () => { delete choice.id; renderDetails(); }}), detail);
@@ -160,14 +270,80 @@ function purchaseEditor() {
     assets.append(assetsFor(item, index)); itemPanel.append(grid, assets); result.push(itemPanel);
   });
   result.push(el('div', {class: 'image-buttons'}, el('button', {type: 'button', onclick: () => { o.items.push({sourceItemId: `local:${crypto.randomUUID()}`, title: '', quantity: 1, paidAmount: ''}); change(); render(); }}, '添加商品行'), el('button', {type: 'button', onclick: () => {
-    try { const allocations = C.allocate(o.paidAmount, o.items.map(item => item.paidAmount || '0')); o.items.forEach((item, index) => item.paidAmount = allocations[index]); state.amountConfirmed = false; change(); render(); message('已按现有行金额比例分摊（无金额时均分）。请核对商品实付，再勾选金额确认。'); } catch (error) { message(error.message, true); }
+    try { const allocations = C.allocate(o.paidAmount, o.items.map(item => item.paidAmount || '0')); o.items.forEach((item, index) => item.paidAmount = allocations[index]); change(); render(); message('已按现有行金额比例分摊（无金额时均分）。请核对商品实付后保存。'); } catch (error) { message(error.message, true); }
   }}, '分摊订单实付到各商品行')));
-  const confirmation = el('input', {type: 'checkbox', checked: Boolean(state.amountConfirmed), required: true, onchange: event => { state.amountConfirmed = event.target.checked; change(); }});
-  result.push(el('label', {class: 'check'}, confirmation, '已核对日期、金额和数量，确认创建所选物品。'));
   return result;
 }
+const EDIT_FIELDS = {
+  device: ['name', 'type', 'status', 'remark', 'fileId'],
+  wardrobe: ['name', 'categoryId', 'brand', 'color', 'size', 'memo', 'fileId'],
+};
+function editableAssetFields(kind, value) {
+  return Object.fromEntries(EDIT_FIELDS[kind].map(key => [key, value[key] == null ? '' : String(value[key])]));
+}
+function assetChanges(edit) {
+  return Object.fromEntries(EDIT_FIELDS[edit.kind].filter(key => edit.fields[key] !== edit.base[key]).map(key => [key, edit.fields[key]]));
+}
+function assetMessage(type, asset, extra = {}) {
+  return call({type, kind: asset.kind, id: asset.id, draftId: storageKey.slice('capture:'.length), scope: state.scope, ...extra});
+}
+async function beginAssetEdits() {
+  if (busy || pendingUploads || !state.result) return;
+  if (editingSaved() && state.assetEdits.some(edit => Object.keys(assetChanges(edit)).length) && !confirm('重新读取会放弃尚未保存的修改，继续吗？')) return;
+  savedReadError = '';
+  setBusy(true, '正在读取已保存物品…'); render();
+  try {
+    const next = await Promise.all(state.result.assets.map(async asset => {
+      const current = await assetMessage('CAPTURE_ASSET_GET', asset);
+      if (!current?.id) throw new Error('物品已删除或无权访问');
+      const index = state.draft.items.findIndex(item => item.sourceItemId === asset.sourceItemId);
+      const original = state.assetEdits?.find(edit => edit.id === asset.id && edit.kind === asset.kind) || state.assetChoices[index]?.[asset.unitIndex - 1];
+      const fields = editableAssetFields(asset.kind, current);
+      return {...asset, choice: asset.kind, fields, base: structuredClone(fields), coverUrl: original?.fields?.fileId === fields.fileId ? original.coverUrl : ''};
+    }));
+    state.assetEdits = next; await persist(); render(); message('可以修改物品信息和封面，完成后点击“保存修改”。');
+  } catch (error) { savedReadError = '读取物品失败：' + error.message; render(); message(savedReadError, true); }
+  finally { setBusy(false); }
+}
+function savedAssetsEditor() {
+  return state.assetEdits.map((edit, index) => {
+    const f = edit.fields;
+    const values = (key, optionName, emptyLabel) => {
+      const pairs = optionPairs(optionName);
+      if (f[key] && !pairs.some(([id]) => id === f[key])) pairs.push([f[key], `当前值（${f[key]}）`]);
+      // The wardrobe update contract cannot clear an existing category with null.
+      return key === 'categoryId' && f[key] ? pairs : [['', emptyLabel], ...pairs];
+    };
+    const grid = fields(field(f, 'name', '物品名称', {required: true, wide: true}));
+    if (edit.kind === 'device') grid.append(field(f, 'type', '设备类型', {values: values('type', 'deviceTypes', '未分类')}), field(f, 'status', '设备状态', {values: values('status', 'deviceStatuses', '未设置')}), field(f, 'remark', '设备备注', {type: 'textarea', wide: true}));
+    else grid.append(field(f, 'categoryId', '衣物分类', {values: values('categoryId', 'wardrobeCategories', '未分类')}), field(f, 'brand', '品牌'), field(f, 'color', '颜色'), field(f, 'size', '尺码'), field(f, 'memo', '衣物备注', {type: 'textarea', wide: true}));
+    const item = state.draft.items.find(item => item.sourceItemId === edit.sourceItemId) || {};
+    grid.append(imageControl(f, item.imageUrl, edit.kind === 'device' ? 'device' : 'wardrobe_item', Boolean(edit.base.fileId), {item, choice: edit}));
+    return panel(`第 ${index + 1} 件 · ${edit.kind === 'device' ? '设备' : '衣物'}`, el('p', {class: 'small'}, `已保存物品 · ${edit.id}`), grid);
+  });
+}
+async function saveAssetEdits() {
+  const edits = state.assetEdits.filter(edit => Object.keys(assetChanges(edit)).length);
+  if (!edits.length) return;
+  if (edits.some(edit => !edit.fields.name.trim())) { message('请填写物品名称', true); return; }
+  setBusy(true, '正在保存物品修改…');
+  let completed = 0;
+  try {
+    for (const edit of edits) {
+      const current = await assetMessage('CAPTURE_ASSET_UPDATE', edit, {changes: assetChanges(edit), base: edit.base});
+      const next = editableAssetFields(edit.kind, current);
+      // Each successful update is recorded separately so a later failure cannot re-create assets.
+      edit.fields = next; edit.base = structuredClone(next);
+      completed++; await persist();
+    }
+    render(); message(`已更新 ${completed} 件物品。`);
+  } catch (error) {
+    render(); message(`${completed ? `已更新 ${completed} 件；` : ''}${error.message}。未确认的修改已保留，可核实后重试。`, true);
+  } finally { setBusy(false); }
+}
 function render() {
-  $('editor').replaceChildren(...(state.kind === 'douban' ? doubanEditor() : purchaseEditor()));
+  const saved = state.kind === 'purchase' && Boolean(state.result);
+  $('editor').replaceChildren(...(editingSaved() ? savedAssetsEditor() : saved ? [panel('已保存物品', el('p', {class: 'small', role: 'status'}, savedReadError || '正在读取物品信息，完成后可直接修改…'))] : state.kind === 'douban' ? doubanEditor() : purchaseEditor()));
   warningList([...new Set([...(state.warnings || []), ...(state.preview?.warnings || [])])]);
   if (state.result) showResult(state.result); updateSaveState();
 }
@@ -194,7 +370,7 @@ async function switchDoubanSource() {
 async function preview() {
   if (sourceChangePromise) { await sourceChangePromise; }
   if (sourcePendingUrl !== undefined) { try { await switchDoubanSource(); } catch (error) { message(error.message, true); return; } }
-  if (busy || pendingUploads || (state.kind === 'purchase' && (state.result || state.uncertain))) return; setBusy(true, state.kind === 'douban' ? '正在解析并查重…' : '正在检查商品信息…');
+  if (busy || pendingUploads || (state.kind === 'purchase' && ((state.result && !editingSaved()) || state.uncertain))) return; setBusy(true, state.kind === 'douban' ? '正在解析并查重…' : '正在检查商品信息…');
   try {
     const localChanges = state.kind === 'douban' && state.baseFields ? dirtyDouban() : {};
     const request = previewRequest();
@@ -223,7 +399,6 @@ function commitPayload() {
     return {url: state.draft.url, action: state.action || 'create', ...(existing ? {existingId: String(existing.id), version: existing.version} : {}), fields};
   }
   const order = previewRequest(); C.validateOrder(order);
-  if (!state.amountConfirmed) throw new Error('请勾选金额和订单信息确认');
   const assets = [];
   order.items.forEach((item, index) => {
     for (let unit = 1; unit <= item.quantity; unit++) {
@@ -239,10 +414,12 @@ function commitPayload() {
   return {order, amountConfirmed: true, assets};
 }
 async function commit(event) {
-  event.preventDefault(); if (busy || pendingUploads || (state.kind === 'purchase' && state.result)) return;
+  event.preventDefault(); if (busy || pendingUploads) return;
+  if (editingSaved()) return saveAssetEdits();
+  if (state.kind === 'purchase' && state.result) return;
   let dispatched = false;
   try {
-    if (sourcePendingUrl !== undefined || !state.preview || state.previewFingerprint !== C.stableJSON(previewRequest())) throw new Error(state.kind === 'purchase' ? '商品信息已修改，请重新检查' : '信息已修改，请重新预览与查重');
+    if (state.kind === 'douban' && (sourcePendingUrl !== undefined || !state.preview || state.previewFingerprint !== C.stableJSON(previewRequest()))) throw new Error('信息已修改，请重新预览与查重');
     const payload = commitPayload();
     if (state.uncertain && state.submission?.fingerprint !== C.stableJSON(payload)) throw new Error('上次结果不确定，不能修改内容后换请求标识重试；请先核实设备／衣柜');
     state.submission = C.submission(state.submission, payload);
@@ -257,12 +434,13 @@ async function commit(event) {
     state.uncertain = false;
     state.result = result;
     if (state.kind === 'douban') { state.baseFields = pickDouban(state.fields); state.previewFingerprint = null; }
-    await persist(); showResult(result); message('');
+    await persist(); render(); message('');
   } catch (error) {
     if (dispatched && (error.uncertain || /超时|timeout|Failed to fetch|NetworkError|结果不确定|无法确认.*提交|结果待确认|正在处理|处理中/i.test(error.message))) { state.uncertain = true; await persist(); message(error.message + '。保存结果不确定，请先核实已有记录；不会自动重试。', true); }
     else { if (dispatched) { state.uncertain = false; await persist(); } message(error.message, true); }
   }
   finally { setBusy(false); }
+  if (state.kind === 'purchase' && state.result && !editingSaved()) await beginAssetEdits();
 }
 async function init() {
   try {
@@ -290,7 +468,9 @@ async function init() {
     }
     $('page-title').textContent = state.kind === 'douban' ? '豆瓣书影音 · 入库预览' : `${state.draft.platform === 'jd' ? '京东' : '淘宝'}商品 · 录入设备／衣柜`;
     $('source-description').textContent = '';
-    $('preview').textContent = state.kind === 'douban' ? '预览与查重' : '检查商品信息';
+    $('preview').hidden = state.kind === 'purchase';
+    $('preview').textContent = '预览与查重';
+    $('edit-saved').addEventListener('click', beginAssetEdits);
     $('preview').addEventListener('click', preview); $('capture-form').addEventListener('submit', commit);
     $('discard').addEventListener('click', async () => { if (confirm(state.kind === 'purchase' ? '清除草稿后重新采集会产生新请求，不能依靠订单号防止重复。请先到设备／衣柜核实是否已保存，再清除。已保存物品不会删除。' : '清除当前本地草稿？已保存的 AIO Life 记录不会删除。')) { await persistQueue; await chrome.storage.local.remove(storageKey); location.reload(); } });
     render();
@@ -298,7 +478,10 @@ async function init() {
     if (state.kind === 'purchase') {
       try { options = await api('/capture/options'); render(); } catch (error) { message('分类选项加载失败：' + error.message + '。可以先填写草稿；刷新页面后重试。', true); }
     }
-    if (state.result) showResult(state.result);
+    if (state.result) {
+      showResult(state.result);
+      if (state.kind === 'purchase' && (!editingSaved() || !state.assetEdits.some(edit => Object.keys(assetChanges(edit)).length))) await beginAssetEdits();
+    }
     else if (state.uncertain) message('上次保存结果不确定，请先到 AIO Life 核实记录；不会自动重试。', true);
     else if (!state.preview && state.kind === 'douban') await preview();
   } catch (error) { message(error.message, true); $('page-title').textContent = '无法打开采集草稿'; $('capture-form').hidden = true; }

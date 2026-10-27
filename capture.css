@@ -55,3 +55,16 @@ a { color: var(--accent); }
 .actions > div { margin-left: auto; }
 .privacy-note summary { cursor: pointer; width: fit-content; }
 .privacy-note p { margin-top: 8px; }
+
+.cover-gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.cover-gallery[hidden] { display: none; }
+.cover-gallery button { padding: 4px; border: 2px solid var(--border); }
+.cover-gallery button[aria-pressed="true"] { border-color: var(--primary); }
+.cover-gallery img { display: block; width: 76px; height: 76px; }
+.product-link { align-self: center; font-size: 12px; padding: 8px 0; }
+.image-control img[hidden] { display: none; }
+
+.cover-gallery button { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.cover-gallery button span { font-size: 11px; line-height: 1.5; }
+.cover-placeholder { width: 88px; min-height: 106px; display: flex; align-items: center; text-align: center; padding: 8px; border-radius: 8px; background: var(--bg); color: var(--muted); font-size: 12px; }
+.image-control [role="status"]:empty { display: none; }

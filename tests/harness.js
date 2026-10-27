@@ -11,7 +11,7 @@ const scope = 'local-ui-test';
 let doubanSaved;
 const purchaseResults = new Map();
 let assetSequence = 9000;
-const order = {platform: 'jd', orderNo: 'UI-TEST-20261022', sourceUrl: 'https://details.jd.com/normal/item.action?orderid=UI-TEST-20261022', shopName: '测试商店', orderStatus: 'completed', paidAmount: '300.00', paidAt: '2026-10-22 10:30:00', orderedAt: '2026-10-21 20:15:00', freight: '0.00', items: [{sourceItemId: 'sku:test-mouse', title: '测试鼠标', sku: 'test-mouse', quantity: 1, paidAmount: '100.00'}, {sourceItemId: 'sku:test-shirt', title: '测试衬衫', sku: 'test-shirt', quantity: 2, paidAmount: '200.00'}]};
+const order = {platform: 'jd', orderNo: 'UI-TEST-20261022', sourceUrl: 'https://details.jd.com/normal/item.action?orderid=UI-TEST-20261022', shopName: '测试商店', orderStatus: 'completed', paidAmount: '300.00', paidAt: '2026-10-22 10:30:00', orderedAt: '2026-10-21 20:15:00', freight: '0.00', items: [{sourceItemId: 'sku:test-mouse', title: '测试鼠标', sku: '100000001', quantity: 1, paidAmount: '100.00'}, {sourceItemId: 'sku:test-shirt', title: '测试衬衫', sku: '100000002', quantity: 2, paidAmount: '200.00'}]};
 function fixture(kind) {
   return {kind, scope, captureVersion: 2, sourceKey: kind + ':ui-test', sourceTitle: 'UI 测试页面', adapterVersion: 'fixture-1', warnings: ['这是合成测试草稿，不是真实个人订单。'], draft: kind === 'douban' ? {url: 'https://book.douban.com/subject/1084336/', metadata: {title: 'UI 测试图书', author: '测试作者', type: 1, totalProgress: 200}} : order};
 }

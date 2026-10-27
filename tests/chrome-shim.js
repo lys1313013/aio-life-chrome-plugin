@@ -12,5 +12,5 @@ window.chrome = {
     set: async values => { for(const [key,value] of Object.entries(values)) localStorage.setItem(key,JSON.stringify(value)); },
     remove: async key => localStorage.removeItem(key)
   }},
-  permissions:{request:async()=>false}
+  permissions:{request:async()=>false,contains:async()=>false}
 };

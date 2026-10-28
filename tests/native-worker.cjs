@@ -21,8 +21,8 @@ function nativeWorker({fetchImpl = fetch, token = 'TEST-ONLY-NOT-A-REAL-TOKEN', 
     const entry={path:new URL(url).pathname,status:body?.status,key:body?.idempotencyKey};calls.push(entry);
     const response=await fetchImpl(url,options);entry.httpStatus=response.status;return response;
   }});
-  ctx.importScripts=file=>vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),ctx,{filename:file});
-  ctx.importScripts('capture/background.js');ctx.importScripts('douban-auto/background.js');
+  ctx.importScripts=(...files)=>files.forEach(file=>vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),ctx,{filename:file}));
+  ctx.importScripts('background.js');
   const sender=(url='https://movie.douban.com/subject/36445098/',tabId=1,documentId='doc-1')=>({id:'test-id',url,frameId:0,tab:{id:tabId},documentId});
   const send=(message,from=sender())=>new Promise(resolve=>{if(message.type!=='DOUBAN_AUTO_PAGE_GET'&&message.type?.startsWith('DOUBAN_AUTO_')&&!('scope' in message))message={...message,scope:createHash('sha256').update(storage.apiBaseUrl+'\n'+storage.authToken).digest('hex')};for(const listener of listeners){const handled=listener(message,from,resolve);if(handled===true)return;}resolve({success:false,error:'Unhandled test message'});});
   return {ctx,storage,send,sender,calls,notifications,setGranted:value=>{granted=value;}};

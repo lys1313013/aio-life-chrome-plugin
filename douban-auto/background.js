@@ -11,7 +11,7 @@ function serialDouban(key, task) {
   return next;
 }
 async function doubanSettings() {
-  const [config, stored, granted] = await Promise.all([captureConfig(), chrome.storage.local.get(['doubanAutoEnabled']), chrome.permissions.contains({origins: [DOUBAN_ORIGIN]})]);
+  const [config, stored, granted] = await Promise.all([AioConfig.read(), chrome.storage.local.get(['doubanAutoEnabled']), chrome.permissions.contains({origins: [DOUBAN_ORIGIN]})]);
   return {...config, enabled: Boolean(stored.doubanAutoEnabled && granted), granted};
 }
 function validateDoubanSender(message, sender) {
@@ -49,7 +49,7 @@ async function drainDouban(key, settings, manual) {
     await chrome.storage.local.set({[key]: data});
     await notifyDouban(item, {state: 'sending', status: item.status});
     try {
-      const result = await captureFetch('/capture/douban/sync', {method: 'POST', scope: settings.scope, body: {url: item.url, status: item.status, idempotencyKey: item.key, metadata: item.metadata}});
+      const result = await AioApi.request('/capture/douban/sync', {method: 'POST', scope: settings.scope, uncertainWrite: true, body: {url: item.url, status: item.status, idempotencyKey: item.key, metadata: item.metadata}});
       const removed = item.status === 'removed';
       const validId = typeof result?.id === 'string' && result.id.length > 0;
       const validResult = result?.mediaType === 'movie' && result.status === item.status && (removed ? result.operation === 'deleted' ? validId : result.operation === 'absent' && result.id === null : validId && ['created', 'updated', 'unchanged'].includes(result.operation));

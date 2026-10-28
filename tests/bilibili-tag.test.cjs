@@ -4,6 +4,7 @@ const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { JSDOM } = require('jsdom');
+const { webcrypto } = require('node:crypto');
 
 const root = path.resolve(__dirname, '..');
 const read = file => readFileSync(path.join(root, file), 'utf8');
@@ -19,10 +20,9 @@ function worker({ ok = true, result = { code: 0, data: null } } = {}) {
   let listener;
   const context = vm.createContext({
     console: { log() {}, error() {} },
-    importScripts() {},
-    captureConfig: async () => ({ base: 'https://api.test.invalid/api' }),
+    URL, TextEncoder, crypto: webcrypto, AbortSignal, FormData,
     chrome: {
-      storage: { local: { get: async () => ({ authToken: 'TEST-ONLY-TOKEN' }) } },
+      storage: { local: { get: async () => ({ authToken: 'TEST-ONLY-TOKEN', apiBaseUrl: 'https://api.test.invalid/api' }) } },
       runtime: { onMessage: { addListener: fn => listener = fn } }
     },
     fetch: async (url, options) => {
@@ -38,7 +38,7 @@ function worker({ ok = true, result = { code: 0, data: null } } = {}) {
       return { ok, json: async () => result };
     }
   });
-  vm.runInContext(read('background.js'), context);
+  for (const file of ['shared/config.js', 'shared/api.js', 'bilibili/background.js']) vm.runInContext(read(file), context, {filename: file});
   return {
     calls,
     send: message => new Promise(resolve => listener(message, {}, resolve)),
@@ -54,6 +54,9 @@ for (const [tag, status] of tags) {
     assert.equal(response.data.totalProgress, 63);
     const request = app.calls.at(-1);
     assert.equal(request.options.method, 'POST');
+    assert.equal(request.options.credentials, 'same-origin');
+    assert.equal(request.options.redirect, 'follow');
+    assert.equal(request.options.signal, undefined);
     assert.deepEqual(JSON.parse(request.options.body), {
       bvid: 'BVtarget', title: '测试视频', url: 'https://bilibili.com/video/BVtarget?p=2',
       cover: 'https://i0.hdslb.com/test.jpg', duration: 200, episodes: 2,
@@ -106,6 +109,7 @@ async function popup(app) {
     } },
     tabs: { query: async () => [{ id: 1, title: '测试视频', url: 'https://www.bilibili.com/video/BVtarget?p=2' }] }
   };
+  w.eval(read('shared/config.js'));
   w.eval(read('capture/core.js'));
   w.eval(read('popup.js'));
   await until(() => !w.document.querySelector('.tag-item').disabled);
@@ -165,7 +169,7 @@ test('B站页面菜单与弹窗状态一致，点击后经后台发送正确状�
       else app.send(message).then(callback);
     } } };
     try {
-      w.eval(read('content.js'));
+      w.eval(read('bilibili/content.js'));
       await until(() => w.document.querySelector('.aiolife-sub-item'));
       assert.deepEqual([...w.document.querySelectorAll('.aiolife-sub-item')].map(item => item.dataset.tag), tags.map(([label]) => label));
       w.document.querySelector(`[data-tag="${tag}"]`).click();

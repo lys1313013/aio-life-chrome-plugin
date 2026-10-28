@@ -1,11 +1,10 @@
 /* Shared capture primitives. No cookies or page credentials leave the content script. */
 (function (root) {
   'use strict';
-  const DEFAULT_API = 'https://aiolife.top/api';
-  function apiBase(value = DEFAULT_API) {
-    const url = new URL(value);
-    if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error('服务地址必须是 HTTP(S) 地址，不能包含账号、查询参数或片段');
-    return url.href.replace(/\/+$/, '');
+  // Bump when the editor and background handoff contract changes.
+  const HANDOFF_PROTOCOL = 'memory-transfer-v1';
+  function assertHandoffProtocol(config) {
+    if (config?.handoffProtocol !== HANDOFF_PROTOCOL) throw new Error('插件页面与后台版本不一致，请到 chrome://extensions 重新加载 AIO Life，再回到来源页面重新采集。');
   }
   function identify(value) {
     let url; try { url = new URL(value); } catch { return null; }
@@ -45,11 +44,6 @@
     const fingerprint = stableJSON(payload);
     return previous?.fingerprint === fingerprint ? previous : {fingerprint, key: uuid()};
   }
-  async function unwrap(response) {
-    let result; try { result = await response.json(); } catch { throw new Error(`服务返回的不是 JSON（HTTP ${response.status}），请检查 API 地址`); }
-    if (!response.ok || result?.code !== 0 || result.data === false) throw new Error(result?.message || `请求失败（HTTP ${response.status}）`);
-    return result.data;
-  }
   function validateOrder(order) {
     if (!order.items?.length) throw new Error('请至少添加一件商品');
     const keys = new Set();
@@ -62,6 +56,6 @@
     }
     if (order.items.reduce((sum, item) => sum + cents(item.paidAmount), 0n) !== cents(order.paidAmount)) throw new Error('各商品行实付合计须等于订单实付（请计入优惠、运费分摊）');
   }
-  root.AioCapture = {DEFAULT_API, apiBase, identify, money, cents, fromCents, allocate, stableJSON, submission, unwrap, validateOrder};
+  root.AioCapture = {HANDOFF_PROTOCOL, assertHandoffProtocol, identify, money, cents, fromCents, allocate, stableJSON, submission, validateOrder};
   if (typeof module !== 'undefined') module.exports = root.AioCapture;
 })(globalThis);

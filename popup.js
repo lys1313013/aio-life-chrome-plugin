@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     saveAuthBtn.textContent = '保存中…';
     try {
       const token = authInput.value.trim();
-      const base = AioCapture.apiBase(apiInput.value.trim());
+      const base = AioConfig.apiBase(apiInput.value.trim());
       const origin = new URL(base).origin + '/*';
       const permitted = await chrome.permissions.request({origins: [origin]});
       if (!permitted) throw new Error('需要允许访问你配置的 API 服务地址');

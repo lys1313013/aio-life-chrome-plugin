@@ -1,7 +1,6 @@
 /* Privileged capture transport. Only extension pages may call these messages. */
 importScripts('capture/core.js');
 importScripts('capture/jd-images.js');
-chrome.storage.local.setAccessLevel?.({accessLevel: 'TRUSTED_CONTEXTS'});
 const captureRequests = new Map();
 const CAPTURE_PATHS = /^\/capture\/(?:options|(?:douban|purchase)\/(?:preview|commit))$/;
 const IMAGE_HOSTS = ['doubanio.com', '360buyimg.com', 'alicdn.com', 'taobaocdn.com'];
@@ -90,25 +89,6 @@ async function captureJdImages(sku) {
     return data;
   } finally { jdImageRequests.delete(sku); }
 }
-async function captureConfig() {
-  const config = await chrome.storage.local.get(['authToken', 'apiBaseUrl']);
-  const base = AioCapture.apiBase(config.apiBaseUrl || AioCapture.DEFAULT_API);
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${base}\n${config.authToken || ''}`));
-  const scope = [...new Uint8Array(digest)].map(x => x.toString(16).padStart(2, '0')).join('');
-  return {...config, base, scope};
-}
-async function captureFetch(path, {method = 'GET', body, scope} = {}) {
-  const config = await captureConfig();
-  if (scope && config.scope !== scope) throw new Error('连接账号或服务已变化，请重新采集页面，避免混用草稿');
-  if (!config.authToken) throw new Error('请先在插件连接设置中保存 Token');
-  const headers = {Authorization: config.authToken};
-  if (body && !(body instanceof FormData)) headers['Content-Type'] = 'application/json';
-  let response;
-  try { response = await fetch(config.base + path, {method, headers, body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined, credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(30000)}); }
-  catch (error) { error.uncertain = /\/(?:commit|sync)$/.test(path); throw error; }
-  try { return await AioCapture.unwrap(response); }
-  catch (error) { error.uncertain = /\/(?:commit|sync)$/.test(path) && (response.status >= 500 || /JSON|结果不确定|无法确认.*提交|结果待确认|正在处理|处理中/.test(error.message)); throw error; }
-}
 async function captureUpload(data) {
   if (!['read', 'movie', 'device', 'wardrobe_item'].includes(data.bizType)) throw new Error('无效图片业务类型');
   let blob;
@@ -131,7 +111,7 @@ async function captureUpload(data) {
   } else throw new Error('请选择 PNG、JPEG、WebP 或 GIF 图片');
   if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(blob.type) || blob.size > 10 * 1024 * 1024) throw new Error('仅支持 10 MB 以内的 PNG、JPEG、WebP、GIF 图片');
   const form = new FormData(); form.append('file', blob, `capture.${{'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif'}[blob.type]}`); form.append('bizType', data.bizType);
-  return captureFetch('/file/upload', {method: 'POST', body: form, scope: data.scope});
+  return AioApi.request('/file/upload', {method: 'POST', body: form, scope: data.scope});
 }
 const ASSET_EDIT_FIELDS = {
   device: ['name', 'type', 'status', 'remark', 'fileId'],
@@ -143,7 +123,7 @@ async function captureAsset(message) {
   const draft = (await chrome.storage.local.get(`capture:${draftId}`))[`capture:${draftId}`];
   if (draft?.scope !== scope || !draft.result?.assets?.some(asset => asset.kind === kind && asset.id === id)) throw new Error('只能修改本草稿已保存的物品');
   const path = kind === 'device' ? `/device/${id}` : `/wardrobe/items/${id}`;
-  const current = await captureFetch(path, {scope});
+  const current = await AioApi.request(path, {scope});
   if (!current || String(current.id) !== id) throw new Error('物品已删除或无权访问，请到设备／衣柜核实');
   if (message.type === 'CAPTURE_ASSET_GET') return current;
   const changes = message.changes;
@@ -164,24 +144,21 @@ async function captureAsset(message) {
     if (typeof body.season === 'string') body.season = body.season.split(',').filter(Boolean);
     Object.assign(body, changes);
   }
-  const updated = await captureFetch(path, {method: 'PUT', body, scope});
+  const updated = await AioApi.request(path, {method: 'PUT', body, scope});
   if (kind === 'device' && updated !== true) throw new Error('设备未更新，请核实是否已删除或无权访问');
-  const saved = await captureFetch(path, {scope});
+  const saved = await AioApi.request(path, {scope});
   if (!saved || Object.entries(changes).some(([key, value]) => text(saved[key]) !== value)) throw new Error('修改结果未确认，请核实后重试');
   return saved;
 }
 async function captureMessage(message) {
   if (message.type === 'CAPTURE_CONFIG_GET') {
-    const config = await captureConfig(); return {base: config.base, configured: Boolean(config.authToken), scope: config.scope};
+    const config = await AioConfig.read(); return {base: config.base, configured: Boolean(config.authToken), scope: config.scope, handoffProtocol: AioCapture.HANDOFF_PROTOCOL};
   }
   if (message.type === 'CAPTURE_CONFIG_SET') {
-    const update = {apiBaseUrl: AioCapture.apiBase(message.base)};
-    if (typeof message.token === 'string' && message.token.trim()) update.authToken = message.token.trim();
-    if (message.clearToken) update.authToken = '';
-    await chrome.storage.local.set(update); return captureMessage({type: 'CAPTURE_CONFIG_GET'});
+    await AioConfig.write(message); return captureMessage({type: 'CAPTURE_CONFIG_GET'});
   }
   if (message.type === 'CAPTURE_OPEN') {
-    const config = await captureConfig();
+    const config = await AioConfig.read();
     const data = message.capture;
     if (!data || !['douban', 'purchase'].includes(data.kind) || !data.sourceKey) throw new Error('页面采集结果无效');
     const keyData = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${config.scope}:${data.sourceKey}`));
@@ -196,7 +173,7 @@ async function captureMessage(message) {
     if (!CAPTURE_PATHS.test(message.path) || !['GET', 'POST'].includes(message.method || 'GET')) throw new Error('不支持的接口');
     const key = message.body?.idempotencyKey && `${message.scope}:${message.path}:${message.body.idempotencyKey}`;
     if (key && captureRequests.has(key)) return captureRequests.get(key);
-    const request = captureFetch(message.path, {method: message.method, body: message.body, scope: message.scope});
+    const request = AioApi.request(message.path, {method: message.method, body: message.body, scope: message.scope, uncertainWrite: message.path.endsWith('/commit')});
     if (key) captureRequests.set(key, request);
     try { return await request; } finally { if (key) captureRequests.delete(key); }
   }

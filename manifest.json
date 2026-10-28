@@ -26,10 +26,10 @@
         "https://www.bilibili.com/video/*"
       ],
       "js": [
-        "content.js"
+        "bilibili/content.js"
       ],
       "css": [
-        "styles.css"
+        "bilibili/styles.css"
       ],
       "run_at": "document_idle"
     }

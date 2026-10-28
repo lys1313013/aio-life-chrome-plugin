@@ -1,9 +1,10 @@
 const test=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const fs=require('node:fs');const path=require('node:path');const {webcrypto}=require('node:crypto');
 const root=path.resolve(__dirname,'..');
-function worker(fetchImpl){
- const listeners=[],storage={authToken:'TEST-ONLY-NOT-A-REAL-TOKEN',apiBaseUrl:'https://api.test.invalid/api'};
- const ctx=vm.createContext({URL,TextEncoder,TextDecoder,crypto:webcrypto,AbortSignal,Blob,FormData,setTimeout,clearTimeout,fetch:fetchImpl,console,chrome:{permissions:{contains:async()=>true},tabs:{query:async()=>[]},runtime:{id:'test-id',getURL:p=>'chrome-extension://test-id/'+p,onMessage:{addListener:fn=>listeners.push(fn)}},storage:{local:{setAccessLevel:async()=>{},get:async()=>storage,set:async update=>Object.assign(storage,update)}}}});
- ctx.importScripts=file=>vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),ctx);
+function worker(fetchImpl, initialStorage = {}){
+ const listeners=[],storage={authToken:'TEST-ONLY-NOT-A-REAL-TOKEN',apiBaseUrl:'https://api.test.invalid/api',...initialStorage};
+ const ctx=vm.createContext({URL,TextEncoder,TextDecoder,crypto:webcrypto,AbortSignal,Blob,FormData,setTimeout,clearTimeout,fetch:fetchImpl,console,chrome:{permissions:{contains:async()=>true},tabs:{query:async()=>[]},runtime:{id:'test-id',getURL:p=>'chrome-extension://test-id/'+p,onMessage:{addListener:fn=>listeners.push(fn)}},storage:{local:{setAccessLevel:async()=>{},get:async()=>storage,set:async update=>Object.assign(storage,update),remove:async keys=>{for(const key of keys)delete storage[key];}}}}});
+ ctx.importScripts=(...files)=>files.forEach(file=>vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),ctx,{filename:file}));
+ ctx.importScripts('shared/config.js','shared/api.js');
  vm.runInContext(fs.readFileSync(path.join(root,'capture/background.js'),'utf8'),ctx);
  const send=(message,sender={id:'test-id',url:'chrome-extension://test-id/capture.html'})=>new Promise(resolve=>listeners[0](message,sender,resolve));
  return {ctx,storage,send};
@@ -13,9 +14,10 @@ test('page content cannot access capture transport/config, token never returned 
  const denied=await w.send({type:'CAPTURE_CONFIG_GET'},{id:'test-id',url:'https://details.jd.com/normal/item.action'});
  assert.equal(denied.success,false);assert.equal(count,0);
  const config=await w.send({type:'CAPTURE_CONFIG_GET'});assert.equal(config.data.configured,true);assert.equal(config.data.authToken,undefined);assert(!JSON.stringify(config).includes(w.storage.authToken));
+ assert.equal(config.data.handoffProtocol, require('../capture/core.js').HANDOFF_PROTOCOL);
 });
 test('duplicate in-flight logical commit sends once and backend business failure remains failure',async()=>{
- let count=0,release;const w=worker(async(url,options)=>{count++;assert.equal(options.credentials,'omit');assert.equal(options.redirect,'error');await new Promise(r=>release=r);return new Response(JSON.stringify({code:9,message:'业务拒绝'}));});
+ let count=0,release;const w=worker(async(url,options)=>{count++;assert.equal(options.credentials,'omit');assert.equal(options.redirect,'error');assert(options.signal instanceof AbortSignal);await new Promise(r=>release=r);return new Response(JSON.stringify({code:9,message:'业务拒绝'}));});
  const config=(await w.send({type:'CAPTURE_CONFIG_GET'})).data;
  const message={type:'CAPTURE_API',scope:config.scope,path:'/capture/purchase/commit',method:'POST',body:{idempotencyKey:'same-key'}};
  const first=w.send(message),second=w.send(message);for(let i=0;i<50&&!release;i++)await new Promise(r=>setTimeout(r,2));

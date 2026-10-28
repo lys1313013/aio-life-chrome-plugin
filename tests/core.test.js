@@ -1,6 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const C = require('../capture/core.js');
+test('capture handoff requires the current background protocol', () => {
+  assert.doesNotThrow(() => C.assertHandoffProtocol({handoffProtocol: C.HANDOFF_PROTOCOL}));
+  for (const config of [undefined, {}, {handoffProtocol: 'obsolete'}, {handoffProtocol: 1}]) {
+    assert.throws(() => C.assertHandoffProtocol(config), /chrome:\/\/extensions.*重新加载 AIO Life/);
+  }
+});
 test('money is exact decimal, allocation preserves every cent and deterministic tails', () => {
   assert.equal(C.money('000001.5'), '1.50');
   assert.equal(C.cents('999999999999.99'), 99999999999999n);
@@ -13,12 +19,6 @@ test('same semantic submission keeps key after timeout; editing creates new key'
   const first=C.submission(null,{fields:{id:'9007199254740993123',title:'a'}},uuid);
   assert.equal(C.submission(first,{fields:{title:'a',id:'9007199254740993123'}},uuid).key,first.key);
   assert.notEqual(C.submission(first,{fields:{title:'b',id:'9007199254740993123'}},uuid).key,first.key);
-});
-test('business errors over HTTP 200 do not count as success',async()=>{
-  await assert.rejects(C.unwrap(new Response(JSON.stringify({code:1,message:'拒绝入库'}))),/拒绝入库/);
-  await assert.rejects(C.unwrap(new Response(JSON.stringify({code:'0',data:{id:'1'}}))),/请求失败/);
-  await assert.rejects(C.unwrap(new Response(JSON.stringify({code:0,data:false}))),/请求失败/);
-  assert.deepEqual(await C.unwrap(new Response(JSON.stringify({code:0,data:{id:'9007199254740993123'}}))),{id:'9007199254740993123'});
 });
 test('order validation rejects ambiguous lines and mismatched allocation',()=>{
   const item={sourceItemId:'a',title:'测试',quantity:1,paidAmount:'1.00'};
@@ -33,5 +33,4 @@ test('only supported detail pages identified, no lookalike domains',()=>{
   assert.equal(C.identify('https://evil-douban.com/subject/123'),null);
   assert.equal(C.identify('https://item.jd.com/123.html'),null);
   assert.equal(C.identify('https://details.jd.com/normal/item.action?orderid=1234567').platform,'jd');
-  assert.throws(()=>C.apiBase('https://user:secret@example.com/api'));
 });

@@ -130,10 +130,9 @@ test('JD successful gallery is reused briefly across editor reloads; errors are 
 });
 
 async function savedAssetWorker(kind, fetchImpl) {
- const w=worker(fetchImpl), draftId='b'.repeat(64), id='9007199254740993123';
+ const w=worker(fetchImpl), id='9007199254740993123';
  const scope=(await w.send({type:'CAPTURE_CONFIG_GET'})).data.scope;
- w.storage['capture:'+draftId]={scope,result:{assets:[{kind,id}]}};
- return {...w,message:{type:'CAPTURE_ASSET_UPDATE',draftId,scope,kind,id}};
+ return {...w,message:{type:'CAPTURE_ASSET_UPDATE',scope,kind,id}};
 }
 test('saved device updates only edited fields under original string ID and verifies the result',async()=>{
  let current={id:'9007199254740993123',name:'old',remark:'server remark',purchasePrice:'189.04'},puts=0;
@@ -155,7 +154,7 @@ test('saved wardrobe update preserves season and purchase fields outside the edi
  });
  const result=await w.send({...w.message,base:{name:'shirt'},changes:{name:'updated shirt'}});assert.equal(result.success,true);assert.equal(result.data.name,'updated shirt');
 });
-test('saved asset rejects stale edits, foreign draft assets, unsafe fields and account changes',async()=>{
+test('saved asset rejects stale edits, mismatched server IDs, unsafe fields and account changes',async()=>{
  let gets=0,puts=0;
  const w=await savedAssetWorker('device',async(url,options)=>{if(options.method==='PUT')puts++;else gets++;return new Response(JSON.stringify({code:0,data:{id:'9007199254740993123',name:'changed elsewhere'}}));});
  assert.match((await w.send({...w.message,base:{name:'old'},changes:{name:'mine'}})).error,/其他页面修改/);
@@ -170,4 +169,24 @@ test('saved device false update result and unconfirmed readback never report suc
   const w=await savedAssetWorker('device',async(url,options)=>new Response(JSON.stringify({code:0,data:options.method==='PUT'?mode!=='false':{id:'9007199254740993123',name:'old'}})));
   const result=await w.send({...w.message,base:{name:'old'},changes:{name:'new'}});assert.equal(result.success,false);assert.match(result.error,/未更新|未确认|请求失败/);
  }
+});
+
+test('capture handoff is one-time memory only, old drafts are purged without deleting config',async()=>{
+ const w=worker(async()=>{throw new Error('No network expected');},{'capture:old':{result:{assets:[{id:'999'}]}},doubanAutoEnabled:true});
+ let opened;
+ w.ctx.chrome.tabs.create=async options=>{opened=options.url;return {id:1};};
+ const capture={kind:'purchase',sourceKey:'jd:123',draft:{items:[{title:'private item'}]},warnings:[]};
+ const first=await w.send({type:'CAPTURE_OPEN',capture});assert.equal(first.success,true);
+ assert(!Object.keys(w.storage).some(key=>key.startsWith('capture:')));assert.equal(w.storage.doubanAutoEnabled,true);assert(w.storage.authToken);
+ assert(!opened.includes('private'));assert.equal(new URL(opened).searchParams.get('transfer'),first.data.id);
+ const taken=await w.send({type:'CAPTURE_TAKE',id:first.data.id});assert.equal(taken.data.draft.items[0].title,'private item');
+ assert.equal((await w.send({type:'CAPTURE_TAKE',id:first.data.id})).success,false);
+ const second=await w.send({type:'CAPTURE_OPEN',capture});assert.notEqual(first.data.id,second.data.id);
+ w.storage.authToken='CHANGED-TEST-ACCOUNT';assert.equal((await w.send({type:'CAPTURE_TAKE',id:second.data.id})).success,false);
+});
+test('capture handoff expiry never restores a previous result',async()=>{
+ const w=worker(async()=>{});w.ctx.chrome.tabs.create=async()=>({id:1});
+ const opened=await w.send({type:'CAPTURE_OPEN',capture:{kind:'purchase',sourceKey:'jd:123',draft:{items:[]}}});
+ vm.runInContext('for (const transfer of captureTransfers.values()) transfer.expiresAt = 0',w.ctx);
+ assert.equal((await w.send({type:'CAPTURE_TAKE',id:opened.data.id})).success,false);
 });

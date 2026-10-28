@@ -49,7 +49,6 @@
         const qtyText = first(row, ['.goods-number', '.p-num', '.quantity', '[class*="quantity"]']);
         const quantityMatch = qtyText.match(/^(?:x|×)?\s*(\d+)\s*(?:件)?$/i) || rowText.match(/(?:数量[:：]?\s*|[×x]\s*)(\d+)(?:\s|$)/);
         let sourceItemId = row.getAttribute('data-order-item-id') || row.getAttribute('data-sub-order-id') || row.getAttribute('data-suborderid') || row.querySelector('[data-sub-order-id]')?.getAttribute('data-sub-order-id') || '';
-        if (!sourceItemId && sku && quantityMatch) sourceItemId = `sku:${sku}|spec:${spec || ''}`;
         items.push({sourceItemId, title, sku, spec, quantity: quantityMatch ? Number(quantityMatch[1]) : null, paidAmount: amount(rowText, ['商品实付', '实付金额', '实付款']), imageUrl: image(row, url)});
       }
       if (items.length) break;
@@ -63,7 +62,14 @@
     const warnings = [];
     const counts = new Map();
     for (const item of items) counts.set(item.sourceItemId, (counts.get(item.sourceItemId) || 0) + 1);
-    items.forEach((item, index) => { if (!item.sourceItemId || counts.get(item.sourceItemId) > 1) item.sourceItemId = `line:${index + 1}`; });
+    const occurrences = new Map();
+    items.forEach((item, index) => {
+      if (item.sku && (!item.sourceItemId || counts.get(item.sourceItemId) > 1)) {
+        const base = `sku:${item.sku}|spec:${item.spec || ''}`;
+        const occurrence = (occurrences.get(base) || 0) + 1; occurrences.set(base, occurrence);
+        item.sourceItemId = `${base}|row:${occurrence}`;
+      } else if (!item.sourceItemId) item.sourceItemId = `line:${index + 1}`;
+    });
     if (!items.length) warnings.push('未识别到商品明细。请确认打开的是订单详情页；可手动添加，不能使用商品标价代替实付。');
     if (items.some(item => !item.quantity)) warnings.push('部分商品数量未识别，请逐行确认。');
     if (!['paid', 'completed'].includes(draft.orderStatus)) warnings.push('订单未确认已支付，或包含退款／预售／合并支付；请核对实际购买金额及物品是否需要加入设备／衣柜。');

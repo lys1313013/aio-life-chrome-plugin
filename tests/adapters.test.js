@@ -7,9 +7,9 @@ test('JD observed DOM selectors: paid differs from price; completed footer is no
   assert.equal(r.draft.items[0].quantity,1);assert.equal(r.draft.items[0].paidAmount,'189.04');assert.match(r.draft.items[0].sourceItemId,/^sku:100000001/);assert.equal(r.draft.items[0].imageUrl,'https://img10.360buyimg.com/test.png');
   assert(!JSON.stringify(r).includes('DO-NOT-RETAIN'));assert(!r.warnings.some(w=>w.includes('未确认已支付')));
 });
-test('duplicate SKU/spec rows remain separate local batch lines, never merge quantities',()=>{
+test('duplicate SKU/spec rows remain separate stable order lines, never merge quantities',()=>{
   const url='https://details.jd.com/normal/item.action?orderid=12345678901234';const d=doc('jd-order.html',url);const row=d.querySelector('tr');row.parentElement.append(row.cloneNode(true));const r=A.jd(d,url);
-  assert.equal(r.draft.items.length,2);assert.deepEqual(r.draft.items.map(i=>i.sourceItemId),['line:1','line:2']);assert(r.draft.items.every(i=>i.paidAmount===undefined));
+  assert.equal(r.draft.items.length,2);assert.deepEqual(r.draft.items.map(i=>i.sourceItemId),['sku:100000001|spec:黑色 27英寸|row:1','sku:100000001|spec:黑色 27英寸|row:2']);assert(r.draft.items.every(i=>i.paidAmount===undefined));
 });
 test('Taobao fixture preserves large IDs and line totals for multi-quantity items',()=>{
   const url='https://trade.taobao.com/trade/detail/trade_item_detail.htm?bizOrderId=8888888888888888888&token=PRIVATE';const r=A.taobao(doc('taobao-order.html',url),url);
@@ -27,4 +27,17 @@ test('Taobao standard biz_order_id query fallback is retained without unrelated 
  const url='https://trade.taobao.com/trade/detail/trade_item_detail.htm?biz_order_id=8888888888888888888&token=PRIVATE';
  const d=doc('taobao-order.html',url);d.body.innerHTML=d.body.innerHTML.replace('订单编号：8888888888888888888','订单详情');const r=A.taobao(d,url);
  assert.equal(r.draft.orderNo,'8888888888888888888');assert.equal(new URL(r.draft.sourceUrl).searchParams.get('biz_order_id'),'8888888888888888888');assert(!r.draft.sourceUrl.includes('PRIVATE'));
+});
+
+test('fallback order line identity survives unrelated row reordering and missing quantity',()=>{
+ const url='https://details.jd.com/normal/item.action?orderid=12345678901234';
+ const d=doc('jd-order.html',url), first=A.jd(d,url).draft.items[0];
+ const row=d.querySelector('tr'), other=row.cloneNode(true);
+ for(const link of other.querySelectorAll('a[href]'))link.href=link.href.replace('100000001','200000002');
+ other.removeAttribute('data-sku');other.removeAttribute('productid');
+ row.parentElement.prepend(other);
+ const repeated=A.jd(d,url).draft.items.find(item=>item.sku===first.sku);
+ assert.equal(repeated.sourceItemId,first.sourceItemId);
+ const qty=row.querySelector('.goods-number,.p-num,.quantity');if(qty)qty.textContent='';
+ assert.equal(A.jd(d,url).draft.items.find(item=>item.sku===first.sku).sourceItemId,first.sourceItemId);
 });

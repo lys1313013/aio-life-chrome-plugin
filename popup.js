@@ -112,6 +112,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     captureButton.disabled = true;
     setStatus('正在读取页面…', 'loading');
     try {
+      AioCapture.assertHandoffProtocol(await call({type: 'CAPTURE_CONFIG_GET'}));
       await chrome.scripting.executeScript({target: {tabId: tab.id}, files: ['capture/core.js', 'capture/adapters/common.js', 'capture/adapters/douban.js', 'capture/adapters/jd.js', 'capture/adapters/taobao.js', 'capture/extract.js']});
       const results = await chrome.scripting.executeScript({target: {tabId: tab.id}, func: () => extractAioCapture()});
       const capture = results[0]?.result;

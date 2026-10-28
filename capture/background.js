@@ -2,6 +2,13 @@
 importScripts('capture/core.js');
 importScripts('capture/jd-images.js');
 const captureRequests = new Map();
+// One-time transfer to the editor, never a persistent draft or saved-record cache.
+const captureTransfers = new Map();
+const captureCleanup = (async () => {
+  const stored = await chrome.storage.local.get(null);
+  const keys = Object.keys(stored).filter(key => key.startsWith('capture:'));
+  if (keys.length) await chrome.storage.local.remove(keys);
+})();
 const CAPTURE_PATHS = /^\/capture\/(?:options|(?:douban|purchase)\/(?:preview|commit))$/;
 const IMAGE_HOSTS = ['doubanio.com', '360buyimg.com', 'alicdn.com', 'taobaocdn.com'];
 const jdImageRequests = new Map();
@@ -115,13 +122,12 @@ async function captureUpload(data) {
 }
 const ASSET_EDIT_FIELDS = {
   device: ['name', 'type', 'status', 'remark', 'fileId'],
-  wardrobe: ['name', 'categoryId', 'brand', 'color', 'size', 'memo', 'fileId'],
+  wardrobe: ['name', 'categoryId', 'brand', 'color', 'size', 'remark', 'fileId'],
 };
 async function captureAsset(message) {
-  const {kind, id, draftId, scope} = message;
-  if (!ASSET_EDIT_FIELDS[kind] || typeof id !== 'string' || !/^\d{1,30}$/.test(id) || !/^[a-f0-9]{64}$/.test(draftId || '') || !scope) throw new Error('无效物品参数');
-  const draft = (await chrome.storage.local.get(`capture:${draftId}`))[`capture:${draftId}`];
-  if (draft?.scope !== scope || !draft.result?.assets?.some(asset => asset.kind === kind && asset.id === id)) throw new Error('只能修改本草稿已保存的物品');
+  const {kind, id, scope} = message;
+  if (!ASSET_EDIT_FIELDS[kind] || typeof id !== 'string' || !/^\d{1,30}$/.test(id) || !scope) throw new Error('无效物品参数');
+  // Ownership is checked by the server under the current account.
   const path = kind === 'device' ? `/device/${id}` : `/wardrobe/items/${id}`;
   const current = await AioApi.request(path, {scope});
   if (!current || String(current.id) !== id) throw new Error('物品已删除或无权访问，请到设备／衣柜核实');
@@ -151,6 +157,7 @@ async function captureAsset(message) {
   return saved;
 }
 async function captureMessage(message) {
+  await captureCleanup;
   if (message.type === 'CAPTURE_CONFIG_GET') {
     const config = await AioConfig.read(); return {base: config.base, configured: Boolean(config.authToken), scope: config.scope, handoffProtocol: AioCapture.HANDOFF_PROTOCOL};
   }
@@ -161,13 +168,22 @@ async function captureMessage(message) {
     const config = await AioConfig.read();
     const data = message.capture;
     if (!data || !['douban', 'purchase'].includes(data.kind) || !data.sourceKey) throw new Error('页面采集结果无效');
-    const keyData = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${config.scope}:${data.sourceKey}`));
-    const id = [...new Uint8Array(keyData)].map(x => x.toString(16).padStart(2, '0')).join('');
-    const key = `capture:${id}`;
-    const saved = (await chrome.storage.local.get(key))[key];
-    if (!saved) await chrome.storage.local.set({[key]: {...data, scope: config.scope, createdAt: Date.now()}});
-    await chrome.tabs.create({url: chrome.runtime.getURL(`capture.html?id=${id}`)});
-    return {id, restored: Boolean(saved)};
+    const now = Date.now();
+    for (const [key, transfer] of captureTransfers) if (transfer.expiresAt <= now) captureTransfers.delete(key);
+    if (captureTransfers.size >= 20) throw new Error('待打开页面过多，请稍后重试');
+    const id = crypto.randomUUID();
+    captureTransfers.set(id, {data: {kind: data.kind, draft: data.draft, warnings: data.warnings || [], scope: config.scope}, expiresAt: now + 60000});
+    try { await chrome.tabs.create({url: chrome.runtime.getURL(`capture.html?transfer=${id}`)}); }
+    catch (error) { captureTransfers.delete(id); throw error; }
+    return {id};
+  }
+  if (message.type === 'CAPTURE_TAKE') {
+    const transfer = captureTransfers.get(message.id);
+    captureTransfers.delete(message.id);
+    if (!transfer || transfer.expiresAt <= Date.now()) throw new Error('采集页面已失效，请回到来源页面重新采集；如刚提交过，请先到 AIO Life 核实结果');
+    const config = await AioConfig.read();
+    if (transfer.data.scope !== config.scope) throw new Error('连接账号或服务已变化，请重新采集页面');
+    return transfer.data;
   }
   if (message.type === 'CAPTURE_API') {
     if (!CAPTURE_PATHS.test(message.path) || !['GET', 'POST'].includes(message.method || 'GET')) throw new Error('不支持的接口');
@@ -185,6 +201,6 @@ async function captureMessage(message) {
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (!message.type?.startsWith('CAPTURE_')) return;
   if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) { respond({success: false, error: '仅扩展页面可执行此操作'}); return; }
-  captureMessage(message).then(data => respond({success: true, data})).catch(error => respond({success: false, uncertain: Boolean(error.uncertain), error: error.name === 'TimeoutError' ? '请求超时，草稿已保留。写入结果可能不确定，请先到 AIO Life 核实；不会自动重试' : error.message}));
+  captureMessage(message).then(data => respond({success: true, data})).catch(error => respond({success: false, uncertain: Boolean(error.uncertain), error: error.name === 'TimeoutError' ? '请求超时。写入结果可能不确定，请先到 AIO Life 核实；不会自动重试' : error.message}));
   return true;
 });
